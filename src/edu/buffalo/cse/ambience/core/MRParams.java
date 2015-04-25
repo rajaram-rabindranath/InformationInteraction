@@ -14,5 +14,4 @@ public enum MRParams
 	TOP_COMBINATIONS,
 	METRIC_ORDER,
 	REDUCER_CNT;
-	
 }
