@@ -22,7 +22,7 @@ public class M_pai extends TableMapper<Text,Text>
 {
 	static long numRecords=0;
 	private String INVALID=null;
-	private int k=0,n=0; // yes ..you guessed it right -- n choose k
+	private int k=0,n=0;
 	private String TARGET=null;
 	private String src_cf[]=null;
 	private int mapperID=0;

@@ -205,8 +205,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 		mapLogK="map";
 		mapLogV=mapperID+","+numRecords+","+iter;
 		context.write(new Text(mapLogK),new Text(mapLogV));
-		System.out.println("Number of records "+numRecords);
 		System.out.println("BlackList count "+blacklistcnt);
-		System.out.println("# valid iter"+iter);
 	}
 }

@@ -29,7 +29,7 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 	private String mapLogV;
 	private ArrayList<HashMap<Integer,String>> rows = new ArrayList<HashMap<Integer,String>>();
 	private ArrayList<String> targets = new ArrayList<String>();
-	
+	public static int iter=0;
 	@Override
 	protected void setup(Context context) throws IOException, InterruptedException 
 	{
@@ -82,7 +82,6 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 		}
 		StringBuilder strKey=new StringBuilder();
 		StringBuilder strValue=new StringBuilder();
-		//Text jake=new Text(); jake.append(); please try this @ home FIXME FIXME FIXME
 		
 		int comb[]=new int[k];
 		for(int i=0;i<k;i++)comb[i]=i; // feeder combination
@@ -90,6 +89,7 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 		int index=0;
 		do{
 			// clearing key and value
+			iter++;
 			strKey.setLength(0);
 			strValue.setLength(0);
 			
@@ -124,12 +124,9 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 	@Override
 	protected void cleanup(Context context) throws IOException, InterruptedException 
     {
-		/********************** FOMULA FOR THE PAI*****************************
-    	 *  calculating PAI(X1,X2,X3,P) = H(X1,X2,X3) + H(P) - H(X1,X2,X2,X3,P)
-    	 **********************************************************************/
 		System.out.println("Total number of records processed");
-		/*mapLogK="map";
+		mapLogK="map";
 		mapLogV=mapperID+","+numRecords+","+iter;
-		context.write(new Text(mapLogK),new Text(mapLogV));*/
+		context.write(new Text(mapLogK),new Text(mapLogV));
 	}
 }
