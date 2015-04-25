@@ -44,19 +44,14 @@ public class LibHBase implements DBOps
 	private Configuration conf = null;
 	private Configuration hdfsConf = null;
 	private static LibHBase instance = null;
-	private boolean isInitialized=false; // to guard against repeated initilizations
-	private NavigableMap<HRegionInfo,ServerName> regions=null;
-	private ArrayList<String> regionKeys=null;
-	private byte[][] splits = null;
-	private static final int DEFAULT_SPLITCNT=1;
 	private static final int DEFAULT_SCANNER_CACHING=500;
-	private int splitCnt=DEFAULT_SPLITCNT;
-	private int srcRegionSize;
 	private boolean idem=false;
 	private static final String[] alphabets = {"A","B","C","D","E","F","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"};
 	private static final int alphaLen = alphabets.length;
+	
+	// configuration properties
 	private static final long DEFAULT_TIMEOUT=1800000*2; 
-	private static Configuration mine;
+	
 	/**
 	 * From experience -- FIXME
 	 * @author dev
@@ -66,30 +61,25 @@ public class LibHBase implements DBOps
 		
 	}
 	
-	private LibHBase() 
+	private LibHBase(Configuration hdfsConf) 
 	{
-		conf = HBaseConfiguration.create(mine);//HBaseConfiguration.create(); -- FIXME -- lib jars
+		this.hdfsConf=hdfsConf;
+		conf = HBaseConfiguration.create(hdfsConf);//HBaseConfiguration.create(); -- FIXME -- lib jars
 		// set all job properties
 		conf.setLong("mapreduce.task.timeout", DEFAULT_TIMEOUT);
 		conf.setBoolean("mapreduce.map.speculative",false); 
 		//conf.set("mapreduce.task.io.sort.factor",)
 	}
 	
-	
-	public static void setconf(Configuration conf)
-	{
-		mine=conf;
-	}
-	
 	/**
 	 * 
 	 * @return
 	 */
-	public static LibHBase getInstance() 
+	public static LibHBase getInstance(Configuration hdfsConf) 
 	{
 		if(instance == null)
 		{
-			instance = new LibHBase();
+			instance = new LibHBase(hdfsConf);
 		}
 		return instance;
 	}
@@ -112,31 +102,13 @@ public class LibHBase implements DBOps
 	{
 		return conf;
 	}
-	
-	public void setSplitsCnt(int cnt)
-	{
-		splitCnt=cnt;
-	}
-	
 
-	private void setSrcChunkSize(int chunkSize)
-	{
-		srcRegionSize=chunkSize;
-	}
-	
-	
-	public int getSrcRegionSize()
-	{
-		return srcRegionSize;
-	}
-	
-	
 	/**
 	 * 
 	 * @param serverCnt
 	 * @return
 	 */
-	private byte[][] genSplits()
+	private byte[][] genSplits(int splitCnt)
 	{
 		byte[][] regionSplits=new byte[splitCnt-1][];
 		for(int i=0;i<splitCnt-1;i++)
@@ -160,50 +132,7 @@ public class LibHBase implements DBOps
 		return alphabets[i];
 	}
 	
-	
 	/**
-   	 * Creates the source table, sink table and loads data into source table
-   	 * FIXME must move
-   	 * @return
-   	 */
-   	public boolean DBsetup(AMBIENCE_tables source,AMBIENCE_tables sink,
-   			AMBIENCE_tables jobStats,Columns cols,Rows rows,String jobID)
-   	{
-   		if(!isInitialized)
-   		{
-	   		splits =  genSplits();
-	   		String srcTableName = source.getName()+jobID;
-	   		String sinkTableName=sink.getName()+jobID;
-	   		String jobStatsTableName=jobStats.getName()+jobID;
-	   		String[] srcColFams=source.getColFams();
-	   		String topKTblname=AMBIENCE_tables.topPAI.getName()+jobID;
-	   		
-	   		if(!createTable(srcTableName, srcColFams, splits))
-				return false;
-	   		setRegionInfo(srcTableName);
-	   		
-	   		if(splitCnt > DEFAULT_SPLITCNT)
-	   		{
-	   			if(!loadData(srcTableName,cols,rows,srcColFams,getRegKeysIterator()))
-	   				return false;
-	   		}
-	   		else
-	   		{
-	   			if(!loadData(srcTableName,cols,rows,srcColFams))
-	   				return false;
-	   		}
-	   		if(!createTable(jobStatsTableName,jobStats.getColFams()))
-	   			return false;
-	   		if(!createTable(topKTblname,AMBIENCE_tables.topPAI.getColFams()))
-	   			return false;
-	   		if(!createTable(sinkTableName,sink.getColFams())) 
-	   			return false;
-	   	}
-   		isInitialized=true;
-   		return true;
-   	}
-	
-   	/**
    	 * 
    	 * @param tableName
    	 * @return
@@ -212,8 +141,7 @@ public class LibHBase implements DBOps
    	public NavigableMap<HRegionInfo,ServerName> getRegions(String tableName) throws IOException
    	{
    		HTable handle = getTableHandler(tableName);
-   		NavigableMap<HRegionInfo,ServerName> r =  handle.getRegionLocations();
-   		return r;
+   		return handle.getRegionLocations();
    	}
    	
    	
@@ -256,50 +184,21 @@ public class LibHBase implements DBOps
    	
    	/**
    	 * 
-   	 * @param tableName
-   	 */
-   	private void setRegionInfo(String tableName)
-   	{
-   		try
-   		{
-   			regions = getRegions(tableName);
-   			setRegStartKeys();
-   			/*System.out.println("The keys ----");
-   			for(String a : regionKeys)
-   				System.out.println(a);*/
-   		}
-	    catch(Exception ex)
-	    {
-	        ex.printStackTrace();
-	    }
-	}
-   	
-   	/**
-   	 * 
    	 * @return
    	 */
-   	private void setRegStartKeys()
+   	public ArrayList<String> getRegStartKeys(NavigableMap<HRegionInfo,ServerName> regions)
    	{
-   		regionKeys=new ArrayList<String>();
+   		ArrayList<String> regionKeys=new ArrayList<String>();
    		Set<HRegionInfo> regSet = regions.keySet();
 		for(HRegionInfo hr : regSet)
     	{
-    		if(Bytes.toStringBinary(hr.getStartKey()).isEmpty())
+    		if(Bytes.toStringBinary(hr.getStartKey()).isEmpty()) // hack
     			regionKeys.add("0");
     		else
     			regionKeys.add(Bytes.toStringBinary(hr.getStartKey()));
     	}
+		return regionKeys;
 	}
-   	
-   	/**
-   	 * 
-   	 * @return
-   	 */
-   	private Iterator<String> getRegKeysIterator()
-   	{
-   		return regionKeys.iterator();
-   	}
-   	
    	
 	/**
 	 * 
@@ -318,7 +217,6 @@ public class LibHBase implements DBOps
 			byte[] fam= Bytes.toBytes(src_cf[0]);
 			for(String col : tableFilter)
 			{
-				//System.out.println(col);
 				s.addColumn(fam, Bytes.toBytes(col));
 		    }
 		}
@@ -427,7 +325,7 @@ public class LibHBase implements DBOps
    /**
 	 * Create table in Hbase for storing data
 	 */
-	@Override
+	
 	public boolean createTable(String tableName, String[] colfams) 
 	{
 		Boolean retVal= true;
@@ -490,13 +388,14 @@ public class LibHBase implements DBOps
 	 * @param maxid
 	 * @return
 	 */
-	private boolean createTable(String tableName, String[] colfams,byte[][] splits) 
+	public boolean createTable(String tableName, String[] colfams,int splitCnt) 
 	{
 		Boolean retVal= true;
 		HColumnDescriptor colDesc;
 		HBaseAdmin admin=null;
 		try
 		{
+			byte[][] splits=genSplits(splitCnt);
 			admin = new HBaseAdmin(conf);
 			if(admin.tableExists(tableName) == true)
 			{
@@ -511,7 +410,7 @@ public class LibHBase implements DBOps
 				//colDesc.setCompressionType(Compression.Algorithm.GZ);
 				tableDescriptor.addFamily(colDesc);
 			}
-			admin.createTable(tableDescriptor, splits);
+			admin.createTable(tableDescriptor,splits);
 			admin.close();
 		}
 		catch(MasterNotRunningException mex)
@@ -638,11 +537,6 @@ public class LibHBase implements DBOps
 		return true;
 	}
 	
-	/**
-	 * 
-	 * 
-	 */
-	@Override
 	public boolean readTable(String tableName, String colfam) 
 	{
 		
@@ -668,10 +562,6 @@ public class LibHBase implements DBOps
 			    Get get = new Get(result.getRow());
 			    Result entireRow = table.get(get);
 			    String key = Bytes.toString(result.getRow());
-			    //if(AMBIENCE_tables.mutualInfo.getName()+4.equals(tableName)) // HACK
-			    {
-			    	//key  =data.getMapping(key);
-			    }
 			    NavigableMap<byte[], byte[]> list = entireRow.getFamilyMap(Bytes.toBytes(colfam));
 			    Set<byte[]> entry =  list.keySet();
 			    
@@ -703,74 +593,124 @@ public class LibHBase implements DBOps
 	/**
 	 * Load data into HBase table as specified in the arguments
 	 */
-	public boolean loadData(String tableName,Columns colsObj,Rows rowsObj,String colFams[],Iterator<String> keysIterator) 
+	public boolean loadData(String tbl,ArrayList<String> colnames,
+			ArrayList<ArrayList<String>> rows,String colFams[],boolean loadInvalid) 
 	{
 		try
 		{
-			if(!keysIterator.hasNext()) return false;
-			Configuration config = HBaseConfiguration.create();
-			HBaseAdmin hbAdmin = new HBaseAdmin(config);
-			HTable table = new HTable(config,tableName);
+			NavigableMap<HRegionInfo,ServerName> regions=getRegions(tbl);
+			int splitCnt=regions.size();
 			
-			ArrayList<String> colnames = colsObj.c;
-			ArrayList<ArrayList<String>> rows = rowsObj.r;
-			int colSize = colnames.size()-1;
-			int rowCnt=rows.size(),chunkSize=(int)Math.floor((double)rowCnt/splitCnt),chunkMod=rowCnt%splitCnt; // evenly spread across split -- starting from top
-	   		boolean moduloPresent=true;
-			if(chunkMod!=0) chunkSize++;
-			else
-				moduloPresent=false;
-			byte[] indVars = Bytes.toBytes(colFams[0]);
-			byte[] targetVar=Bytes.toBytes(colFams[1]);
-			int suffix=1;
-			String prefix=keysIterator.next();
- 			String rowIndex="";
- 			setSrcChunkSize(chunkSize);
- 			//System.out.println("the total number of rows ="+rowCnt);
-			//System.out.println("the chunksize is ="+chunkSize);
-			for(int i=0;i<rows.size();i++)
+			if(splitCnt > 1)
 			{
-				ArrayList<String> currentRow =  rows.get(i);
-				rowIndex=prefix+suffix;
-				Put objput = new Put(Bytes.toBytes(rowIndex));
-				
-				for(int j=0;j<colSize;j++)
-				{
-					if(!currentRow.get(j).equals("-99"))
-					objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
-					//objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
-				}
-				
-				//objput.add(targetVar, Bytes.toBytes(Integer.toString(colSize)), Bytes.toBytes(currentRow.get(colSize)));
-				objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
-				table.put(objput);
-				
-				suffix++;
-				if(suffix > chunkSize && keysIterator.hasNext() )
-				{
-					System.out.println("for prefix ="+prefix+" rec cnt="+(suffix-1));
-					if(moduloPresent) // when splits# unevenly divides row# 
-					{
-						chunkMod--;
-						if(chunkMod <= 0)
-							chunkSize = idempotent(chunkSize);
-					}
-					prefix= keysIterator.next();
-					suffix=1;
-				}
+				Iterator<String> keysIterator = getRegStartKeys(getRegions(tbl)).iterator();
+				if(!keysIterator.hasNext()) return false;
+				if(!loadPolyLith(tbl,colnames,rows,colFams,splitCnt,keysIterator,loadInvalid)) return false;
 			}
-			System.out.println("for prefix ="+prefix+" rec cnt="+(suffix-1));
-			hbAdmin.close();
-			table.close();
+			else
+			{
+				if(!loadMonoLith(tbl,colnames,rows,colFams,loadInvalid)) return false;
+			}
 		}
-		catch(IOException ioex)
+		catch(IOException iex)
 		{
-			ioex.printStackTrace();
-			System.out.println("There is a problem in creating the source table");
+			System.out.println("Problems in loading data to "+tbl);
+			iex.printStackTrace();
 			return false;
 		}
 		return true;
+		
 	}
+	
+	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,
+			String[] colFams,boolean loadInvalid) throws IOException
+	{
+		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
+		HTable table=getTableHandler(tbl);
+		int colSize = colnames.size()-1;
+		byte[] indVars = Bytes.toBytes(colFams[0]);
+		byte[] targetVar=Bytes.toBytes(colFams[1]);
+		for(int i=0;i<rows.size();i++)
+		{
+			ArrayList<String> currentRow =  rows.get(i);
+			Put objput = new Put(Bytes.toBytes("0"+i)); // to have all rows in order -- so that when we compare split vs !splits we have some notion
+			for(int j=0;j<colSize;j++)
+			{
+				if(loadInvalid)
+					objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
+				else
+				{
+					if(!currentRow.get(j).equals("-99")&loadInvalid)
+						objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
+				}
+				
+			}
+			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
+			table.put(objput);
+		}
+		hbAdmin.close();
+		table.close();
+		return true;
+	}
+	
+	private boolean loadPolyLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[],
+			int splitCnt,Iterator<String> keysIt,boolean loadInvalid) throws IOException
+	{
+		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
+		HTable table = getTableHandler(tbl);
+		int colSize = colnames.size()-1;
+		int rowCnt=rows.size();
+		int chunkSize=(int)Math.floor((double)rowCnt/splitCnt),chunkMod=rowCnt%splitCnt;
+		boolean moduloPresent=true;
+		if(chunkMod!=0) chunkSize++;
+		else
+			moduloPresent=false;
+		byte[] indVars = Bytes.toBytes(colFams[0]);
+		byte[] targetVar=Bytes.toBytes(colFams[1]);
+		int suffix=1;
+		String prefix=keysIt.next();
+		String rowKey="";
+		for(int i=0;i<rows.size();i++)
+		{
+			ArrayList<String> currentRow =  rows.get(i);
+			rowKey=prefix+suffix;
+			Put objput = new Put(Bytes.toBytes(rowKey));
+
+			for(int j=0;j<colSize;j++)
+			{
+				if(loadInvalid)
+					objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
+				else
+				{
+					if(!currentRow.get(j).equals("-99"))
+						objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
+				}
+					
+			}
+			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
+			table.put(objput);
+
+			suffix++;
+			if(suffix > chunkSize && keysIt.hasNext() )
+			{
+				System.out.println("for prefix ="+prefix+" rec cnt="+(suffix-1));
+				if(moduloPresent) // when #splits unevenly divides #row 
+				{
+					chunkMod--;
+					if(chunkMod <= 0)
+						chunkSize = idempotent(chunkSize);
+				}
+				prefix= keysIt.next();
+				suffix=1;
+			}
+		}
+		System.out.println("for prefix ="+prefix+" rec cnt="+(suffix-1));
+		hbAdmin.close();
+		table.close();
+		return true;
+	}
+	
+	
 	
 	/**
 	 * 
@@ -785,46 +725,6 @@ public class LibHBase implements DBOps
 			return (s-1);
 		}
 		return s;
-	}
-	
-	
-	/**
-	 * Load data into HBase table as specified in the arguments
-	 */
-	public boolean loadData(String tableName,Columns colsObj,Rows rowsObj,String colFams[]) 
-	{
-		try
-		{
-			Configuration config = HBaseConfiguration.create();
-			HBaseAdmin hbAdmin = new HBaseAdmin(config);
-			HTable table = new HTable(config,tableName);
-			ArrayList<String> colnames = colsObj.c;
-			ArrayList<ArrayList<String>> rows = rowsObj.r;
-			int colSize = colnames.size()-1;
-			byte[] indVars = Bytes.toBytes(colFams[0]);
-			byte[] targetVar=Bytes.toBytes(colFams[1]);
-			
-			for(int i=0;i<rows.size();i++)
-			{
-				ArrayList<String> currentRow =  rows.get(i);
-				Put objput = new Put(Bytes.toBytes(i));
-				for(int j=0;j<colSize;j++)
-				{
-					objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
-				}
-				objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
-				table.put(objput);
-			}
-			hbAdmin.close();
-			table.close();
-		}
-		catch(IOException ioex)
-		{
-			ioex.printStackTrace();
-			System.out.println("There is a problem in creating the source table");
-			return false;
-		}
-		return true;
 	}
 	
 	/**
@@ -854,28 +754,20 @@ public class LibHBase implements DBOps
 		}
 		return true;
 	}
-
-	
 	
 	/**
 	 * 
 	 * @param map
 	 */
-	public void displayRegionInfo()
+	public void displayRegionInfo(String tbl) throws IOException
 	{
+		NavigableMap<HRegionInfo,ServerName> regions=getRegions(tbl);
 		Set<HRegionInfo> n = regions.keySet();
 		System.out.println("------------------- Region Info ------------------");
 		System.out.println("# of regions = "+n.size());
+		System.out.println("REGION_ID\tSERVER");
 		for(HRegionInfo hr : n)
-    	{
-    		System.out.println("Region id ="+hr.getRegionId());
-    		System.out.println("the name of the server is ::"+regions.get(hr).getServerName());
-    		System.out.println("Region name ="+hr.getRegionNameAsString());
-    		/*System.out.print("#"+cnt+"--");
-    		System.out.print("{ ");
-    		System.out.print(Bytes.toStringBinary(hr.getStartKey())+" , "+Bytes.toStringBinary(hr.getEndKey()));
-    		System.out.println(" }");*/
-    	}
+    		System.out.println(hr.getRegionId()+"\t"+regions.get(hr).getServerName());
     }
 	
 	@Override
@@ -903,13 +795,12 @@ public class LibHBase implements DBOps
 	}
 
 	@Override
-	public ArrayList<gyan> topT(String tblname,int T,int korder,Order sortOrder) 
+	public ArrayList<gyan> topT(String tblname,int T,int korder) 
 	{
 		int LIMIT=0;
 		ArrayList<gyan> top=new ArrayList<gyan>(T);
 	    ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 	    DoubleWritableRowKey d = new DoubleWritableRowKey();
-	    d.setOrder(sortOrder);
 	    HTable table=null;
 	    try
 		{
@@ -920,7 +811,6 @@ public class LibHBase implements DBOps
 			scan.setFilter(korderFilter);
 			scan.addFamily(Bytes.toBytes("infoMet"));
 			ResultScanner scanner = table.getScanner(scan);
-			
 			byte[] key;double value;
 			NavigableMap<byte[], byte[]> rowKV;
 			Get get;Result row;
@@ -928,6 +818,7 @@ public class LibHBase implements DBOps
 			{
 				LIMIT++;
 				get = new Get(result.getRow());
+				get.setMaxVersions(Integer.MAX_VALUE);
 			    row = table.get(get);
 			    key=result.getRow();
 			    buffer.set(key, 0, key.length);
@@ -956,13 +847,5 @@ public class LibHBase implements DBOps
 		}
 		
 		return top;
-	}
-
-
-	@Override
-	public ArrayList<gyan> topT(int T, int korder) 
-	{
-		
-		return null;
 	}
 }
