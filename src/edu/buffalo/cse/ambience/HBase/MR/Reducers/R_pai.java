@@ -41,8 +41,7 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		super.setup(context);
 		reducerID= context.getTaskAttemptID().getTaskID().getId();
 		Configuration conf = context.getConfiguration();
-		int T=Integer.valueOf(conf.get(MRParams.TOP_T_CNT.toString()));
-		findT=locateT.getInstance(T,order.getOrder(conf.get(MRParams.METRIC_ORDER.toString())));
+		
 		String jobID = conf.get(MRParams.JOBID.toString());
 		jobStatsT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
 		sinkT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));;
@@ -121,7 +120,7 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
     	double PAI = Information.PAI(combo, target, combo_n_target, count);
     	
     	/**/
-    	findT.add(key.toString(),PAI);
+    	
     	Put put = new Put(Bytes.toBytes(key.toString()));
     	put.add(colfam,qual,Bytes.toBytes(Double.toString(PAI)));
     	numkeys++;
@@ -135,21 +134,9 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 	 */
 	protected void cleanup(Context context) throws IOException, InterruptedException
 	{
-		// committing top k vals
-		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.topPAI.getColFams()[1]);
-		byte[] qual=Bytes.toBytes("PAI");
-		for(gyan g : findT.asList())
-		{
-			Put put=new Put(g.orderedB);
-			put.add(colfam,qual,Bytes.toBytes(g.combID));
-			context.write(top,put);
-			context.progress();
-		}
-		
-		// job stats committing
 		Put put=new Put(Bytes.toBytes(Integer.toString(reducerID)));
-		colfam=Bytes.toBytes(AMBIENCE_tables.jobStats.getColFams()[1]);
-		qual=Bytes.toBytes("#numkeys");
+		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.jobStats.getColFams()[1]);
+		byte[] qual=Bytes.toBytes("#numkeys");
 		put.add(colfam,qual,Bytes.toBytes(Integer.toString(numkeys)));
 		context.write(jobStatsT, put);
 		context.progress();
