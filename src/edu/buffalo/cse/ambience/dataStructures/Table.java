@@ -106,7 +106,47 @@ public class Table
 		return t;
 	}
 	
-	
+	/**
+	 * 
+	 * @param ids
+	 * @return
+	 */
+	public ArrayList<String> translate(String ids,String delimiter)
+	{
+		if(ids==null)
+			return null;
+		
+		System.out.println("The ids are "+ids);
+		ArrayList<String> list=new ArrayList<String>();
+		String[] ele =ids.split(delimiter);
+		int indVarID=getColCount()-1;
+		int check=-1;
+		try
+		{
+			int colID=0;
+			for(String e : ele)
+			{
+				colID = Integer.parseInt(e);
+				if(colID == indVarID || colID < check) // check if the combination is in proper order
+					return null;
+				list.add(getColName(colID));
+				check=colID;
+			}
+		}
+		catch(NumberFormatException nex)
+		{
+			System.out.println("The input given for columns are not valid");
+			nex.printStackTrace();
+		}
+		
+		if(list.size()==0)
+		{
+			System.out.println("Could not translate cols given");
+			return null;
+		}
+		
+		return list;
+	}
 	/**
 	 * 
 	 * @param colnames
