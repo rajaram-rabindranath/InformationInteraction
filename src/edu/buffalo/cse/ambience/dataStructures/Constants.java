@@ -11,4 +11,6 @@ public class Constants
 	public static final String REGEX_KEY="\\|trait1";
 	public static final Pattern KeyPattern = Pattern.compile(REGEX_KEY);
 	public static final String MAP_KEY="map";
+	public static final String DELIM_COMMA=",";
+	public static final String DELIM_TAB="\t";
 }
