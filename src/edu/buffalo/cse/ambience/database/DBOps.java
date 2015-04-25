@@ -17,5 +17,5 @@ public interface DBOps
 	public boolean modify();
 	public boolean scan();
 	public ArrayList<gyan> topT(int T,int korder);
-	public ArrayList<gyan> topT(int T,int korder,Order sortOrder); 
+	public ArrayList<gyan> topT(String tblname,int T,int korder,Order sortOrder);
 }

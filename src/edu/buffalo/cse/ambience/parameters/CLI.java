@@ -13,7 +13,7 @@ enum UserArgs
 {
 	SRC_FILE_FLAG("f"),
 	KWAY_FLAG("k"),
-	COMB_FLAG("c"),
+	VARLIST_FLAG("v"),
 	OPS_FLAG("o"),
 	INVALID_FLAG("i"),
 	REDUCER_CNT_FLAG("r"),
@@ -21,21 +21,19 @@ enum UserArgs
 	MODE_FLAG("m"),
 	SPLITS_FLAG("s"),
 	HELP_FLAG("h"),
-	JOBID_FLAG("j");
-	
-	
+	TOP_COMBINATIONS_FLAG("x"),
+	TOP_T_FLAG("t"),
+	JOBID_FLAG("j"),
+	METRIC_ORDER_FLAG("z");
 	private String flag;
-	
 	private UserArgs(String flag) 
 	{
 		this.flag = flag;
 	}
-	
 	public String toString()
 	{
-		return flag;
+		return getFlag();
 	}
-	
 	public String getFlag()
 	{
 		return flag;
@@ -52,20 +50,25 @@ public class CLI implements Arguments
 	private static final String DEFAULT_K_WAY="3";
 	private static final String DEFAULT_REDUCERS="2";
 	private static final String DEFAULT_SPLITS="1";
+	private static final String DEFAULT_TOP_T="10";
+	private static final String DEFAULT_TOP_T_ORDER="top";
 	private HashMap<UserArgs,String> params =new HashMap<UserArgs,String>();
 
 	static 
 	{
-		options.addOption(UserArgs.SRC_FILE_FLAG.toString(),true,"Source file");
-		options.addOption(UserArgs.COMB_FLAG.toString(),true,"Combination");
-		options.addOption(UserArgs.INVALID_FLAG.toString(),true,"Invalid value");
-		options.addOption(UserArgs.KWAY_FLAG.toString(),true,"K way number");
-		options.addOption(UserArgs.OPS_FLAG.toString(),true,"Ambience operation");
-		options.addOption(UserArgs.REDUCER_CNT_FLAG.toString(),true,"# Reducers");
-		options.addOption(UserArgs.MODE_FLAG.toString(),true,"Mode");
-		options.addOption(UserArgs.SPLITS_FLAG.toString(),true,"# Splits for Regions");
-		options.addOption(UserArgs.HELP_FLAG.toString(),true,"help menu");
-		options.addOption(UserArgs.JOBID_FLAG.toString(),true,"JobID");
+		options.addOption(UserArgs.SRC_FILE_FLAG.getFlag(),true,"Source file");
+		options.addOption(UserArgs.VARLIST_FLAG.getFlag(),true,"Combination");
+		options.addOption(UserArgs.INVALID_FLAG.getFlag(),true,"Invalid value");
+		options.addOption(UserArgs.KWAY_FLAG.getFlag(),true,"K way number");
+		options.addOption(UserArgs.OPS_FLAG.getFlag(),true,"Ambience operation");
+		options.addOption(UserArgs.REDUCER_CNT_FLAG.getFlag(),true,"# Reducers");
+		options.addOption(UserArgs.MODE_FLAG.getFlag(),true,"Mode");
+		options.addOption(UserArgs.SPLITS_FLAG.getFlag(),true,"# Splits for Regions");
+		options.addOption(UserArgs.HELP_FLAG.getFlag(),true,"help menu");
+		options.addOption(UserArgs.JOBID_FLAG.getFlag(),true,"JobID");
+		options.addOption(UserArgs.METRIC_ORDER_FLAG.getFlag(),true,"Sort order of metric"); // FIXME need to catch this
+		options.addOption(UserArgs.TOP_T_FLAG.getFlag(),true,"Top T values of the metric being tracked");
+		options.addOption(UserArgs.TOP_COMBINATIONS_FLAG.getFlag(),true,"Top Combinations");
 	}
 	
 	/**
@@ -123,7 +126,7 @@ public class CLI implements Arguments
 		 * 2. invalid value must be legit double
 		 * 3. k way must be legit value
 		 */
-		if(!cmd.hasOption(UserArgs.SRC_FILE_FLAG.toString()))
+		if(!cmd.hasOption(UserArgs.SRC_FILE_FLAG.getFlag()))
 		{
 			System.out.println("Source file has not been furnished");
 			help();
@@ -131,16 +134,17 @@ public class CLI implements Arguments
 		}
 		
 		// must have jobID for distributed mode
-		if(!cmd.hasOption(UserArgs.JOBID_FLAG.toString()))
+		if(!cmd.hasOption(UserArgs.JOBID_FLAG.getFlag()))
 		{
 			System.out.println("Source file has not been furnished");
 			help();
 			return false;
 		}
 		
-		if(cmd.hasOption(UserArgs.INVALID_FLAG.toString()))
+		// validity of invalid value
+		if(cmd.hasOption(UserArgs.INVALID_FLAG.getFlag()))
 		{
-			String s=cmd.getOptionValue(UserArgs.INVALID_FLAG.toString());
+			String s=cmd.getOptionValue(UserArgs.INVALID_FLAG.getFlag());
 			try
 			{
 				Double.parseDouble(s);
@@ -155,62 +159,142 @@ public class CLI implements Arguments
 		return true;
 	}
 	
-	
-	public boolean hasCombFlag()
+	public boolean hasVarList()
 	{
-		return cmd.hasOption(UserArgs.COMB_FLAG.toString());
+		return cmd.hasOption(UserArgs.VARLIST_FLAG.getFlag());
 	}
 	
-	
-	
+	private void setVarList()
+	{
+		if(cmd.hasOption(UserArgs.VARLIST_FLAG.getFlag()))
+		{
+			params.put(UserArgs.VARLIST_FLAG,cmd.getOptionValue(UserArgs.VARLIST_FLAG.getFlag()));
+		}
+	}
 	
 	/**
-	 * 
+	 * Each argument must be wetted here
 	 * @return
 	 */
 	private void setParams()
 	{
-		params = new HashMap<UserArgs,String>();
-		/**
-		 * Each argument must be vetted here
-		 */
-		// SRC FILE
-		params.put(UserArgs.SRC_FILE_FLAG,cmd.getOptionValue(UserArgs.SRC_FILE_FLAG.toString()));
-		
-		// job id
-		params.put(UserArgs.JOBID_FLAG,cmd.getOptionValue(UserArgs.JOBID_FLAG.toString()));
-		
-		// mode of operations
-		if(cmd.hasOption(UserArgs.MODE_FLAG.toString()))
+		setFileName();
+		setJobID();
+		setMode();
+		setSplitsCnt();
+		setKway();
+		setInvalid();
+		setReducerCnt();
+		setTcount();
+		setTopCombinations();
+		setVarList();
+		setOperation();
+	}
+	
+	
+	public String getTopCombinations()
+	{
+		return params.get(UserArgs.TOP_COMBINATIONS_FLAG);
+	}
+	
+	/**
+	 * 
+	 */
+	private void help()
+	{
+		HelpFormatter formater= new HelpFormatter();
+		formater.printHelp("hadoop jar ambience.jar ",options);
+	}
+
+	
+	public String getFileName() 
+	{
+		return params.get(UserArgs.SRC_FILE_FLAG);
+	}
+
+	
+	public String getJobID()
+	{
+		return params.get(UserArgs.JOBID_FLAG);
+	}
+	
+	
+	public String getKway() 
+	{
+		return params.get(UserArgs.KWAY_FLAG);
+	}
+
+	
+	public String getOperation() 
+	{
+
+		return params.get(UserArgs.OPS_FLAG);
+	}
+
+	
+	public String getInvalid() 
+	{
+		return params.get(UserArgs.INVALID_FLAG);
+	}
+
+	
+	public String getReducerCnt() 
+	{
+		return params.get(UserArgs.REDUCER_CNT_FLAG);
+	}
+
+	
+	public String getMode() 
+	{
+		return params.get(UserArgs.MODE_FLAG);
+	}
+
+	
+	public String getSplitsCnt() 
+	{
+		return params.get(UserArgs.SPLITS_FLAG);
+	}
+
+	
+	public String getColFilter() 
+	{
+		return params.get(UserArgs.VARLIST_FLAG);
+	}
+
+	
+	public String getTcount() 
+	{
+		return params.get(UserArgs.TOP_T_FLAG);
+	}
+
+	@Override
+	public String getTopTOrder() 
+	{
+		return params.get(UserArgs.METRIC_ORDER_FLAG);
+	}
+	
+	private void setFileName() 
+	{
+		params.put(UserArgs.SRC_FILE_FLAG,cmd.getOptionValue(UserArgs.SRC_FILE_FLAG.getFlag()));
+	}
+
+	private void setMetricOrder()
+	{
+		if(cmd.hasOption(UserArgs.METRIC_ORDER_FLAG.getFlag()))
 		{
-			params.put(UserArgs.MODE_FLAG,cmd.getOptionValue(UserArgs.MODE_FLAG.toString()));
-		}
-		
-		// # regions
-		if(cmd.hasOption(UserArgs.SPLITS_FLAG.toString()))
-		{
-			// would like to have as many regions as nodes in CCR
-			String splits = cmd.getOptionValue(UserArgs.SPLITS_FLAG.toString());
-			try
-			{
-				Integer.valueOf(splits);
-			}
-			catch(NumberFormatException nex)
-			{
-				nex.printStackTrace();
-				splits=DEFAULT_SPLITS;
-			}
-			params.put(UserArgs.SPLITS_FLAG,splits);
+			params.put(UserArgs.METRIC_ORDER_FLAG,cmd.getOptionValue(UserArgs.METRIC_ORDER_FLAG.getFlag()));
 		}
 		else
 		{
-			params.put(UserArgs.SPLITS_FLAG,DEFAULT_SPLITS);
+			params.put(UserArgs.METRIC_ORDER_FLAG,DEFAULT_TOP_T_ORDER);
 		}
-		
-		// KWAY
-		if(cmd.hasOption(UserArgs.KWAY_FLAG.toString()))
+	}
+	
+	private void setKway() 
+	{
+		if(cmd.hasOption(UserArgs.KWAY_FLAG.getFlag()))
 		{
-			String s=cmd.getOptionValue(UserArgs.KWAY_FLAG.toString());
+			String s=cmd.getOptionValue(UserArgs.KWAY_FLAG.getFlag());
 			try
 			{
 				Double.parseDouble(s);
@@ -226,30 +310,34 @@ public class CLI implements Arguments
 		{
 			params.put(UserArgs.KWAY_FLAG,DEFAULT_K_WAY);
 		}
-		
-		// INVALID VALUE
-		if(cmd.hasOption(UserArgs.INVALID_FLAG.toString()))
+	}
+
+	
+	private void setOperation() 
+	{
+		if(cmd.hasOption(UserArgs.OPS_FLAG.getFlag()))
 		{
-			params.put(UserArgs.INVALID_FLAG,cmd.getOptionValue(UserArgs.INVALID_FLAG.toString()));
+			params.put(UserArgs.OPS_FLAG,cmd.getOptionValue(UserArgs.OPS_FLAG.getFlag()));
 		}
 		
-		// COMB COLUMNS
-		if(cmd.hasOption(UserArgs.COMB_FLAG.toString()))
+	}
+
+	
+	private void setInvalid() 
+	{
+		if(cmd.hasOption(UserArgs.INVALID_FLAG.getFlag()))
 		{
-			params.put(UserArgs.COMB_FLAG,cmd.getOptionValue(UserArgs.COMB_FLAG.toString()));
+			params.put(UserArgs.INVALID_FLAG,cmd.getOptionValue(UserArgs.INVALID_FLAG.getFlag()));
 		}
-		
-		// OPERATION
-		if(cmd.hasOption(UserArgs.OPS_FLAG.toString()))
-		{
-			params.put(UserArgs.OPS_FLAG,cmd.getOptionValue(UserArgs.OPS_FLAG.toString()));
-		}
-		
-		// # of Reducers
-		if(cmd.hasOption(UserArgs.REDUCER_CNT_FLAG.toString()))
+	}
+
+	
+	private void setReducerCnt() 
+	{
+		if(cmd.hasOption(UserArgs.REDUCER_CNT_FLAG.getFlag()))
 		{
 			// check if reducer count is a valid number 
-			String reducers  = cmd.getOptionValue(UserArgs.REDUCER_CNT_FLAG.toString());
+			String reducers  = cmd.getOptionValue(UserArgs.REDUCER_CNT_FLAG.getFlag());
 			try
 			{
 				Integer.valueOf(reducers); // check if the reducer count is a valid value
@@ -267,68 +355,66 @@ public class CLI implements Arguments
 			params.put(UserArgs.REDUCER_CNT_FLAG,DEFAULT_REDUCERS);
 		}
 	}
-	
-	/**
-	 * 
-	 */
-	private void help()
-	{
-		HelpFormatter formater= new HelpFormatter();
-		formater.printHelp("hadoop jar ambience.jar edu.buffalo.cse.ambience.Runner",options);
-	}
 
-	@Override
-	public String getFileName() 
+	
+	private void setMode() 
 	{
-		return params.get(UserArgs.SRC_FILE_FLAG);
+		if(cmd.hasOption(UserArgs.MODE_FLAG.getFlag()))
+		{
+			params.put(UserArgs.MODE_FLAG,cmd.getOptionValue(UserArgs.MODE_FLAG.getFlag()));
+		}
 	}
 
 	
-	public String getJobID()
+	private void setSplitsCnt() 
 	{
-		return params.get(UserArgs.JOBID_FLAG);
+		if(cmd.hasOption(UserArgs.SPLITS_FLAG.getFlag()))
+		{
+			// would like to have as many regions as nodes in CCR
+			String splits = cmd.getOptionValue(UserArgs.SPLITS_FLAG.getFlag());
+			try
+			{
+				Integer.valueOf(splits);
+			}
+			catch(NumberFormatException nex)
+			{
+				nex.printStackTrace();
+				splits=DEFAULT_SPLITS;
+			}
+			params.put(UserArgs.SPLITS_FLAG,splits);
+		}
+		else
+		{
+			params.put(UserArgs.SPLITS_FLAG,DEFAULT_SPLITS);
+		}
+	}
+
+	private void setTopCombinations()
+	{
+		
 	}
 	
-	@Override
-	public String getKway() 
+	private void setTcount() 
 	{
-		return params.get(UserArgs.KWAY_FLAG);
+		if(cmd.hasOption(UserArgs.TOP_T_FLAG.getFlag()))
+		{
+			String topT  = cmd.getOptionValue(UserArgs.TOP_T_FLAG.getFlag());
+			try
+			{
+				Integer.valueOf(topT);
+				params.put(UserArgs.TOP_T_FLAG,topT);
+			}
+			catch(NumberFormatException nex)
+			{
+				params.put(UserArgs.TOP_T_FLAG,DEFAULT_TOP_T);
+				System.out.println("The topT count given by user is invalid setting it to default");
+			}
+			setMetricOrder();
+		}
 	}
-
-	@Override
-	public String getOperation() 
+	
+	private void setJobID()
 	{
-
-		return params.get(UserArgs.OPS_FLAG);
-	}
-
-	@Override
-	public String getInvalid() 
-	{
-		return params.get(UserArgs.INVALID_FLAG);
-	}
-
-	@Override
-	public String getReducerCnt() 
-	{
-		return params.get(UserArgs.REDUCER_CNT_FLAG);
-	}
-
-	@Override
-	public String getMode() 
-	{
-		return params.get(UserArgs.MODE_FLAG);
-	}
-
-	@Override
-	public String getSplitsCnt() 
-	{
-		return params.get(UserArgs.SPLITS_FLAG);
-	}
-
-	@Override
-	public String getColFilter() 
-	{
-		return params.get(UserArgs.COMB_FLAG);
+		params.put(UserArgs.JOBID_FLAG,cmd.getOptionValue(UserArgs.JOBID_FLAG.getFlag()));
 	}
 }

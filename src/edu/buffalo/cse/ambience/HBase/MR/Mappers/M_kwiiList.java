@@ -36,7 +36,7 @@ public class M_kwiiList extends TableMapper<Text,Text>
 		try
 		{
 			k=Integer.valueOf(conf.get(MRParams.K_WAY.toString()));
-			n=Integer.valueOf(conf.get(MRParams.COMB_SETSIZE.toString()));
+			n=Integer.valueOf(conf.get(MRParams.SET_SIZE.toString()));
 		}
 		catch(NumberFormatException nex)
 		{

@@ -30,6 +30,9 @@ import org.apache.hadoop.mapreduce.TaskType;
 
 
 
+import org.apache.hadoop.mapreduce.TaskReport;
+import org.apache.hadoop.mapreduce.TaskType;
+
 import edu.buffalo.cse.ambience.parameters.CLI;
 import edu.buffalo.cse.ambience.dataStructures.Columns;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
@@ -55,7 +58,7 @@ public abstract class AMBIENCE
 	public Scan s=null;
 	private HashMap<MRParams, String> mrParams=new HashMap<MRParams,String>();
 	private Table data=null;
-	private static final String DEFAULT_DELIMITER="\\|";
+	private static final String DEFAULT_DELIMITER=",";
 	private ArrayList<String> tablefilter=null;
 	AMBIENCE_ops oper=AMBIENCE_ops.NONE;
 	LibHBase HBase =null; 
@@ -80,61 +83,43 @@ public abstract class AMBIENCE
 	public boolean bootup()
 	{
 		if((oper = AMBIENCE_ops.resolveOps(cli.getOperation())).equals(AMBIENCE_ops.NONE))
-		{
-			System.out.println("The operations requested by the user is invalid");
-   			return false;
-		}
-		
-		// read data from the input file
+			return false;
 		if(!readInput(cli.getFileName(),cli.getMode())) return false;
-		if(cli.hasCombFlag())
+		if(cli.hasVarList())
 		{
 			if(!translateCombo(cli.getColFilter(),DEFAULT_DELIMITER)) return false;
 			if(tablefilter!=null)
 				for(String c : tablefilter)
 					System.out.println("the filter cols "+c);
-		}
-		if(cli.hasCombFlag())
 			data.setDictionary(tablefilter);
-		LibHBase.setconf(ambienceConf);
-		HBase = LibHBase.getInstance();
-		
-		//HBase.topK();
-		
-		
-		//if(true) return false;
-		try
-		{
-			int n = Integer.valueOf(cli.getSplitsCnt());
-			HBase.setSplitsCnt(n);
 		}
-		catch(NumberFormatException nex)
-		{
-			nex.printStackTrace();
-		}
-		
+		if(tablefilter==null)
+			mrParams.put(MRParams.SET_SIZE,Integer.toString(data.getMRColsCnt()));
+		else
+			mrParams.put(MRParams.SET_SIZE,Integer.toString(tablefilter.size()));
 		// set MR parameters
 		mrParams.put(MRParams.JOBID,cli.getJobID());
 		mrParams.put(MRParams.K_WAY,cli.getKway());
 		mrParams.put(MRParams.REDUCER_CNT,cli.getReducerCnt());
 		mrParams.put(MRParams.INVALID_VALUE,cli.getInvalid());
 		mrParams.put(MRParams.TARGET_VAR,data.getColumns().getTargetVar());
-		mrParams.put(MRParams.COMB_LIST,"0|1|2,0|5|10");
+		mrParams.put(MRParams.TOP_T_CNT,cli.getTcount()); 
+		if(oper.equals(AMBIENCE_ops.ITER))
+		{
+			mrParams.put(MRParams.TOP_COMBINATIONS,cli.getTopCombinations());
+			mrParams.put(MRParams.METRIC_ORDER,cli.getTopTOrder());
+		}
+		LibHBase.setconf(ambienceConf);
+		HBase = LibHBase.getInstance(); // FIXME -- mst use this set ambienceConf
+		HBase.setSplitsCnt(Integer.valueOf(cli.getSplitsCnt()));
 		
-		if(tablefilter==null)
-			mrParams.put(MRParams.COMB_SETSIZE,Integer.toString(data.getMRColsCnt()));
-		else
-			mrParams.put(MRParams.COMB_SETSIZE,Integer.toString(tablefilter.size()));
-		
-		// db setup & MR param set
-		if(HBase.DBsetup(AMBIENCE_tables.source, AMBIENCE_tables.getSinkT(oper),
+		// DB setup must be taken care of here not left to HBase -- wrng implementation
+		if(HBase.DBsetup(AMBIENCE_tables.source, AMBIENCE_tables.getSinkT(oper), 
 				AMBIENCE_tables.jobStats,data.getColumns(),data.getRows(),cli.getJobID()))
 			HBase.displayRegionInfo();
 		else
 			return false;
-		
-		s=HBase.getScanner(tablefilter);
-		s.setCaching(HBase.getSrcRegionSize()); // FIXME -- better way to do this
+		s=HBase.getScanner(tablefilter,HBase.getSrcRegionSize());
 		
 		String srctname=AMBIENCE_tables.source.getName()+cli.getJobID();
 		String colFam=AMBIENCE_tables.source.getColFams()[0];
@@ -157,8 +142,8 @@ public abstract class AMBIENCE
 		String[] src_cf =AMBIENCE_tables.source.getColFams();
 		try
 		{
-			Job job = new Job(conf,oper.toString());
-			//Job job = Job.getInstance(conf,oper.toString());
+			//Job job = new Job(conf,oper.toString());
+			Job job = Job.getInstance(conf,oper.toString());
 			job.setNumReduceTasks(Integer.valueOf(mrParams.get(MRParams.REDUCER_CNT))); // FIXME -- need to make this configurable
 			//job.setJarByClass(AMBIENCE.class);
 			String sinkT=AMBIENCE_tables.getSinkT(oper).getName();
@@ -225,10 +210,8 @@ public abstract class AMBIENCE
 			{
 				/** get the job diagnostics **/
 				getDiagnostics(job);
-				//String jobStatsTblName=AMBIENCE_tables.jobStats.getName()+;
+				
 				String sinkTblName=AMBIENCE_tables.getSinkT(oper).getName()+cli.getJobID();
-				/*long sinkRows =HBase.getRowCnt(sinkTblName,"infoMet");
-				System.out.println("# records in sink "+sinkRows);*/
 				HBase.topT(10,3);
 				HBase.printJobStats(cli.getJobID());//(jobStatsTblName,AMBIENCE_tables.jobStats.getColFams()[1],1);
 				HBase.readTable(sinkTblName,AMBIENCE_tables.getColFam(oper));
@@ -435,7 +418,7 @@ public abstract class AMBIENCE
 	 ****************************************************************/
 	private void getDiagnostics(Job job) throws IOException, InterruptedException
 	{
-		/*long start = job.getStartTime();
+		long start = job.getStartTime();
 		long end = job.getFinishTime();
 		System.out.println("Another calculation of time taken "+(double)(end-start)/1000000);
 		TaskReport[] mappers  = job.getTaskReports(TaskType.MAP);
@@ -465,7 +448,7 @@ public abstract class AMBIENCE
 			System.out.println(" t taken "+(double)(duration)/1000000+" secs");
 			totRedTime+=duration;
 		}
-		System.out.println("Totl time taken by all reducers "+(double)(totRedTime)/oneMill + "secs\n");*/
+		System.out.println("Totl time taken by all reducers "+(double)(totRedTime)/oneMill + "secs\n");
 	}
 	
 	/**

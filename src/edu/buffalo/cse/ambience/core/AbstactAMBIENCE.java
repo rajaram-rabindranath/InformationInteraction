@@ -74,14 +74,15 @@ public abstract class AbstactAMBIENCE
 		
 		// read data from the input file
 		if(!readInput(cli.getFileName(),cli.getMode())) return false;
-		if(cli.hasCombFlag())
+		if(cli.hasVarList())
 		{
 			if(!translateCombo(cli.getColFilter(),DEFAULT_DELIMITER)) return false;
 			if(tablefilter!=null)
 				for(String c : tablefilter)
 					System.out.println("the filter cols "+c);
 		}
-		if(cli.hasCombFlag())
+		
+		if(cli.hasVarList()) // FIXME -- misleading name comboFlag mst be something similar to var_list
 			data.setDictionary(tablefilter);
 		LibHBase.setconf(ambienceConf);
 		HBase = LibHBase.getInstance();
@@ -104,9 +105,9 @@ public abstract class AbstactAMBIENCE
 		
 		
 		if(tablefilter==null)
-			mrParams.put(MRParams.COMB_SETSIZE,Integer.toString(data.getMRColsCnt()));
+			mrParams.put(MRParams.SET_SIZE,Integer.toString(data.getMRColsCnt()));
 		else
-			mrParams.put(MRParams.COMB_SETSIZE,Integer.toString(tablefilter.size()));
+			mrParams.put(MRParams.SET_SIZE,Integer.toString(tablefilter.size()));
 		
 		
 		// db setup & MR param set

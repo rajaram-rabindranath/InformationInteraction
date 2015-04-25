@@ -58,9 +58,9 @@ public class LibCassandra implements DBOps
 		return null;
 	}
 
-
 	@Override
-	public ArrayList<gyan> topT(int T, int korder, Order sortOrder) {
+	public ArrayList<gyan> topT(String tblname, int T, int korder,
+			Order sortOrder) {
 		// TODO Auto-generated method stub
 		return null;
 	}

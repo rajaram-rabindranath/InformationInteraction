@@ -45,7 +45,7 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 		try
 		{
 			k=Integer.valueOf(conf.get(MRParams.K_WAY.toString()));
-			nCols=Integer.valueOf(conf.get(MRParams.COMB_SETSIZE.toString()));
+			nCols=Integer.valueOf(conf.get(MRParams.SET_SIZE.toString()));
 		}
 		catch(NumberFormatException nex)
 		{

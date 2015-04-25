@@ -50,8 +50,8 @@ public class M_higherOder_simple extends TableMapper<Text,Text>
 		try
 		{
 			k=Integer.valueOf(conf.get(MRParams.K_WAY.toString()));
-			n=Integer.valueOf(conf.get(MRParams.COMB_SETSIZE.toString()));
-			String[] topComb=conf.get(MRParams.COMB_LIST.toString()).split(","); // FIXME -- DELIMITER
+			n=Integer.valueOf(conf.get(MRParams.SET_SIZE.toString()));
+			String[] topComb=conf.get(MRParams.TOP_COMBINATIONS.toString()).split(","); // FIXME -- DELIMITER
 			for(int i=0;i<topComb.length;i++) // read in all the combinations as an array
 				combList.add(new ComboObj(topComb[i]));
 		}

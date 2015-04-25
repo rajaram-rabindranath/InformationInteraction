@@ -41,21 +41,20 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		super.setup(context);
 		reducerID= context.getTaskAttemptID().getTaskID().getId();
 		Configuration conf = context.getConfiguration();
-		findT=locateT.getInstance(10,order.top);
+		int T=Integer.valueOf(conf.get(MRParams.TOP_T_CNT.toString()));
+		findT=locateT.getInstance(T,order.getOrder(conf.get(MRParams.METRIC_ORDER.toString())));
+		String jobID = conf.get(MRParams.JOBID.toString());
+		jobStatsT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
+		sinkT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));;
+		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.topPAI.getName()+jobID));;
 		
 		System.out.println("Time out string val"+conf.get("mapreduce.task.timeout"));
 		// just for checking debug
 		String factor =conf.get("mapreduce.task.io.sort.factor");
 		System.out.println("The map io sort factor "+factor);
-
 		long timeout=0;
-		
 		conf.getLong("mapreduce.task.timeout",timeout);
 		System.out.println("The time out val according to getong is "+timeout);
-		String jobID = conf.get(MRParams.JOBID.toString());
-		jobStatsT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
-		sinkT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));;
-		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.topPAI.getName()+jobID));;
 	}
 	
 	/**
@@ -73,7 +72,6 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		StringBuilder comboVal=new StringBuilder();
 		StringBuilder targetVal=new StringBuilder();
 		int count=0;
-		
 		
 		// debug code to check
 		if(key.toString().equals("map"))
@@ -138,7 +136,7 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 	protected void cleanup(Context context) throws IOException, InterruptedException
 	{
 		// committing top k vals
-		/*byte[] colfam=Bytes.toBytes(AMBIENCE_tables.topPAI.getColFams()[1]);
+		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.topPAI.getColFams()[1]);
 		byte[] qual=Bytes.toBytes("PAI");
 		for(gyan g : findT.asList())
 		{
@@ -146,15 +144,15 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 			put.add(colfam,qual,Bytes.toBytes(g.combID));
 			context.write(top,put);
 			context.progress();
-		}*/
+		}
 		
 		// job stats committing
-		/*Put put=new Put(Bytes.toBytes(Integer.toString(reducerID)));
+		Put put=new Put(Bytes.toBytes(Integer.toString(reducerID)));
 		colfam=Bytes.toBytes(AMBIENCE_tables.jobStats.getColFams()[1]);
 		qual=Bytes.toBytes("#numkeys");
 		put.add(colfam,qual,Bytes.toBytes(Integer.toString(numkeys)));
 		context.write(jobStatsT, put);
-		context.progress();*/
+		context.progress();
 	}
 	
 	public void debug(HashBag n)

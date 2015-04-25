@@ -20,6 +20,7 @@ public enum AMBIENCE_ops
 		}
 		catch(Exception ex)
 		{
+			System.out.println("The operations requested by the user is invalid");
 			return NONE;
 		}
 	}

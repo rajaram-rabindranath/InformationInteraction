@@ -10,4 +10,7 @@ public interface Arguments
 	public String getMode();
 	public String getSplitsCnt();
 	public String getColFilter();
+	public String getTcount();
+	public String getTopTOrder();
+	public String getTopCombinations();
 }

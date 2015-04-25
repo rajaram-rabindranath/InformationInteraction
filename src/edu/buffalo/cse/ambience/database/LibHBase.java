@@ -325,7 +325,6 @@ public class LibHBase implements DBOps
 		return s;
 	}
 	
-	
 	public Scan getScanner(int cacheSize,Filter filter) // FIXME
 	{
 		return null;
@@ -334,7 +333,7 @@ public class LibHBase implements DBOps
 	
 	public Scan getScanner(ArrayList<String> tableFilter, int cacheCnt)
 	{
-		Scan s  =getScanner(tableFilter);
+		Scan s=getScanner(tableFilter);
 		s.setCaching(cacheCnt);
 		return s;
 	}
@@ -550,19 +549,11 @@ public class LibHBase implements DBOps
 	 * @param tableName
 	 * @return
 	 */
-	public HTable getTableHandler(String tableName)
+	public HTable getTableHandler(String tableName) throws IOException
 	{
 		HTable tableH = null;
-		try
-		{
-			tableH = new HTable(conf, tableName);
-		}
-		catch(Exception ex)
-		{
-			ex.printStackTrace();
-			System.out.println("Cannot get table handler");
-		}
-		return tableH;
+		tableH = new HTable(conf, tableName);
+		return tableH;	
 	}
 	
 	enum table_ops
@@ -844,6 +835,7 @@ public class LibHBase implements DBOps
 	 */
 	public boolean getRecord(String tableName,String RowKey)
 	{
+		// check what form of encoding is done
 		Result rs = null;
 		try
 		{
@@ -910,31 +902,18 @@ public class LibHBase implements DBOps
 		return false;
 	}
 
-	// FIXME
-	private void readInit(String tableName) throws IOException
-	{
-		HTable table = new HTable(conf,tableName);
-		Scan scan = new Scan();
-		scan.setCaching(DEFAULT_SCANNER_CACHING); 
-		scan.addFamily(Bytes.toBytes("Rank"));
-		ResultScanner scanner = table.getScanner(scan);
-	}
-
 	@Override
-	public ArrayList<gyan> topT(int T,int korder,Order sortOrder) 
+	public ArrayList<gyan> topT(String tblname,int T,int korder,Order sortOrder) 
 	{
-		
 		int LIMIT=0;
-		HTable table = null;
-		String tableName=AMBIENCE_tables.topPAI.getName()+"4";
 		ArrayList<gyan> top=new ArrayList<gyan>(T);
 	    ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 	    DoubleWritableRowKey d = new DoubleWritableRowKey();
 	    d.setOrder(sortOrder);
-	    
-		try
+	    HTable table=null;
+	    try
 		{
-			table = new HTable(conf,tableName);
+	    	table =getTableHandler(tblname);
 			Scan scan = new Scan();
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
 			Filter korderFilter = new SingleColumnValueFilter(Bytes.toBytes("inforMet"),Bytes.toBytes("k"),CompareOp.EQUAL,Bytes.toBytes(Integer.toString(korder)));
@@ -964,14 +943,14 @@ public class LibHBase implements DBOps
 		catch(IOException ioex)
 		{
 			ioex.printStackTrace();
-			System.out.println("Cannot read data from :"+tableName);
+			System.out.println("Cannot read data from :"+tblname);
 			try
 			{
 				if(table!=null) table.close();
 			}
 			catch(IOException ex)
 			{
-				System.out.println("some error in closing");
+				System.out.println("some error in closing table");
 			}
 			return top;
 		}
