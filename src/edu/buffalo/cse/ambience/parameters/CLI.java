@@ -40,8 +40,6 @@ enum UserArgs
 	}
 }
 
-
-
 public class CLI implements Arguments
 {
 	private static Options options = new Options();
@@ -120,12 +118,6 @@ public class CLI implements Arguments
 	 */
 	private boolean isArgsValid()
 	{
-		/**
-		 * error checking --- 
-		 * 1. need source file
-		 * 2. invalid value must be legit double
-		 * 3. k way must be legit value
-		 */
 		if(!cmd.hasOption(UserArgs.SRC_FILE_FLAG.getFlag()))
 		{
 			System.out.println("Source file has not been furnished");
@@ -157,11 +149,6 @@ public class CLI implements Arguments
 			}
 		}
 		return true;
-	}
-	
-	public boolean hasVarList()
-	{
-		return cmd.hasOption(UserArgs.VARLIST_FLAG.getFlag());
 	}
 	
 	private void setVarList()
@@ -255,14 +242,18 @@ public class CLI implements Arguments
 		return params.get(UserArgs.SPLITS_FLAG);
 	}
 
+	public boolean hasVarList()
+	{
+		return cmd.hasOption(UserArgs.VARLIST_FLAG.toString());
+	}
 	
-	public String getColFilter() 
+	public String getVarList() 
 	{
 		return params.get(UserArgs.VARLIST_FLAG);
 	}
 
 	
-	public String getTcount() 
+	public String getTvalue() 
 	{
 		return params.get(UserArgs.TOP_T_FLAG);
 	}

@@ -9,8 +9,8 @@ public interface Arguments
 	public String getReducerCnt();
 	public String getMode();
 	public String getSplitsCnt();
-	public String getColFilter();
-	public String getTcount();
+	public String getVarList();
+	public String getTvalue();
 	public String getTopTOrder();
 	public String getTopCombinations();
 }
