@@ -32,7 +32,7 @@ public class Math_
 	public static double entropyCont_norm(double[][] mat,int cnt)
 	{
 		double entropy=0.0f;
-		/*int rows=mat.length;
+		int rows=mat.length;
 		cern.jet.math.Functions F = cern.jet.math.Functions.functions;
 		DenseDoubleMatrix2D DM = new DenseDoubleMatrix2D(mat);
         DoubleMatrix2D covM = Statistic.covariance(DM);
@@ -46,7 +46,7 @@ public class Math_
             System.out.println("Warning:covariance matrix is singular,assuming uniform distribution");
             double p = ((double)rows)/cnt; // reverting to simpler way of computin
             entropy = -p*Math.log(p);
-        }*/
+        }
 		return entropy;
 	}
 	
@@ -81,7 +81,7 @@ public class Math_
 	public static double entropyMixed_norm(HashMap<String,HashBag> mixedBag,int totCnt)
 	{
 	    double a=0,b=0,e=0,p=0,ent=0,entDiscrete=0,entCont=0;;
-        /*double mat[][];
+        double mat[][];
         HashBag bag;int setRowCnt;
         Set<String> keys = mixedBag.keySet();
         for(String k:keys)
@@ -96,7 +96,7 @@ public class Math_
             entDiscrete-= a; //H(discrete).
             entCont+= b; //H(continuous|discrete).
         }
-        ent = entDiscrete + entCont;*/
+        ent = entDiscrete + entCont;
         return ent;
 	}
 	

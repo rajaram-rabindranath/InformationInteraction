@@ -17,12 +17,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.regionserver.DelimitedKeyPrefixRegionSplitPolicy;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.mapreduce.Job;
-/*import org.apache.hadoop.mapreduce.TaskReport;
+import org.apache.hadoop.mapreduce.TaskReport;
 import org.apache.hadoop.mapreduce.TaskType;
-*/
+
 
 
 
@@ -137,10 +136,15 @@ public abstract class AMBIENCE
 		HBase = LibHBase.getInstance(hdfsConf);
 		s=HBase.getScanner(varList);
 		if(!HBase.createTable(srcTableName,srcColFams,splitCnt))return false;
+		System.out.println("SRC TABLE CREATED");
 		if(!HBase.loadData(srcTableName,data.getColumns().c,data.getRows().r,srcColFams,loadInvalid))return false;
+		System.out.println("DATA LOADED");
 		if(!HBase.createTable(jobStatsTableName,jobStats.getColFams()))return false;
+		System.out.println("JOBSTATS TABLE CREATED");
 		if(!HBase.createTable(topKTblname,AMBIENCE_tables.topPAI.getColFams()))return false;
+		System.out.println("TOPK TABLE CREATED");
 		if(!HBase.createTable(sinkTableName,sink.getColFams()))return false;
+		System.out.println("SINK TABLE CREATED");
 		dbSetupDebug();
 		return true;
 	}
@@ -395,7 +399,7 @@ public abstract class AMBIENCE
 	 ****************************************************************/
 	private void getDiagnostics(Job job) throws IOException, InterruptedException
 	{
-		/*long start = job.getStartTime();
+		long start = job.getStartTime();
 		long end = job.getFinishTime();
 		System.out.println("Another calculation of time taken "+(double)(end-start)/1000000);
 		TaskReport[] mappers  = job.getTaskReports(TaskType.MAP);
@@ -403,7 +407,7 @@ public abstract class AMBIENCE
 		
 		double totMapTime=0.0f;
 		double totRedTime=0.0f;
-		int oneMill=1000000;
+		int milli=1000;
 		
 		System.out.println("MAPPER TIMES -----------------");
 		
@@ -411,21 +415,21 @@ public abstract class AMBIENCE
 		{
 			System.out.print("The map id "+map.getTaskId());
 			long duration=map.getFinishTime()-map.getStartTime();
-			System.out.println(" t taken "+(double)(duration)/oneMill+" secs");
+			System.out.println(" t taken "+(double)(duration)/milli+" secs");
 			totMapTime+=duration;
 			
 		}
-		System.out.println("Totl time takne by all mappers "+(double)(totMapTime)/oneMill + "secs\n");
+		System.out.println("Totl time takne by all mappers "+(double)(totMapTime)/milli + "secs\n");
 		
 		System.out.println("REDUCER TIMES -----------------");
 		for(TaskReport red : reducers)
 		{
 			System.out.print("The red id "+red.getTaskId());
 			long duration=red.getFinishTime()-red.getStartTime();
-			System.out.println(" t taken "+(double)(duration)/1000000+" secs");
+			System.out.println(" t taken "+(double)(duration)/milli+" secs");
 			totRedTime+=duration;
 		}
-		System.out.println("Totl time taken by all reducers "+(double)(totRedTime)/oneMill + "secs\n");*/
+		System.out.println("Totl time taken by all reducers "+(double)(totRedTime)/milli + "secs\n");
 	}
 	
 	/**

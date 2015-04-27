@@ -61,6 +61,9 @@ public class LibHBase implements DBOps
 		
 	}
 	
+	
+
+	
 	private LibHBase(Configuration hdfsConf) 
 	{
 		this.hdfsConf=hdfsConf;
@@ -143,6 +146,19 @@ public class LibHBase implements DBOps
    		HTable handle = getTableHandler(tableName);
    		return handle.getRegionLocations();
    	}
+   	
+   	/**
+   	 * 
+   	 * @param tbl
+   	 * @param dumpName
+   	 * @param colfam
+   	 * @param qual
+   	 */
+   	public void tableDump(String tbl,String dumpName,String colfam,String qual)
+   	{
+   		
+   	}
+   	
    	
    	
    	/**
@@ -407,7 +423,8 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
-				//colDesc.setCompressionType(Compression.Algorithm.GZ);
+				System.out.println("Just trying out compression");
+				colDesc.setCompressionType(Compression.Algorithm.LZO);
 				tableDescriptor.addFamily(colDesc);
 			}
 			admin.createTable(tableDescriptor,splits);

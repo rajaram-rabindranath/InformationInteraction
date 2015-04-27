@@ -70,8 +70,8 @@ public class AMBIENCE_discrete extends AMBIENCE
 		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
         job.setMapperClass(M_pai.class);
-        job.setCombinerClass(C_pai.class);
-        job.setReducerClass(R_pai_cont.class);
+        //job.setCombinerClass(C_pai.class);
+        job.setReducerClass(R_pai.class);
 		TableMapReduceUtil.addDependencyJars(job);
         TableMapReduceUtil.addDependencyJars(job.getConfiguration());
         TableMapReduceUtil.initTableMapperJob(srcTable,s,M_pai.class, Text.class,Text.class,job);
@@ -144,7 +144,7 @@ public class AMBIENCE_discrete extends AMBIENCE
 		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
         job.setMapperClass(M_pai_cumulative_skipper.class);
-        job.setCombinerClass(C_pai.class);
+       // job.setCombinerClass(C_pai.class);
         job.setReducerClass(R_pai.class);
         TableMapReduceUtil.addDependencyJars(job);
         TableMapReduceUtil.addDependencyJars(job.getConfiguration());
@@ -170,7 +170,3 @@ public class AMBIENCE_discrete extends AMBIENCE
         return false;
 	}
 }
-/*TableMapReduceUtil.initTableMapperJob(AMBIENCE_tables.source.getName(),s,M_kwiiList.class, Text.class,Text.class,job);
-job.setCombinerClass(C_kwiiList.class);
-TableMapReduceUtil.initTableReducerJob(sinkT,R_kwiiList.class, job);
-job.waitForCompletion(true);*/

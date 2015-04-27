@@ -178,11 +178,11 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 			}
 			
 			
-			if(blackList.size()>0) // FIXME DEBUG
+			/*if(blackList.size()>0) // FIXME DEBUG
 			{
 				System.out.println("["+combo[0]+"|"+combo[1]+"|"+combo[2]+"]"+" blackList"+blackList.size());
 			}
-			
+			*/
 			/** remove black-listed row/s **/
 			for(RowObj o:blackList)
 				rows.remove(o);
@@ -205,6 +205,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 		mapLogK="map";
 		mapLogV=mapperID+","+numRecords+","+iter;
 		context.write(new Text(mapLogK),new Text(mapLogV));
-		System.out.println("BlackList count "+blacklistcnt);
+		//System.out.println("BlackList count "+blacklistcnt);
 	}
 }

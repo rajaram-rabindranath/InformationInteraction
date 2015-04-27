@@ -113,14 +113,13 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
         	target.add(targetVal.toString(),cnt);
         	count+=cnt;
         }
-		System.out.println("=============================="+key+"============================");
-	    debug(combo_n_target);
+		//System.out.println("=============================="+key+"============================");
+	    /*debug(combo_n_target);
 	    debug(target);
-	    debug(combo);
+	    debug(combo);*/
     	double PAI = Information.PAI(combo, target, combo_n_target, count);
     	
     	/**/
-    	
     	Put put = new Put(Bytes.toBytes(key.toString()));
     	put.add(colfam,qual,Bytes.toBytes(Double.toString(PAI)));
     	numkeys++;
@@ -142,7 +141,7 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		context.progress();
 	}
 	
-	public void debug(HashBag n)
+	/*public void debug(HashBag n)
 	{
 		{
 	        System.out.println("********************************************");
@@ -155,5 +154,5 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 	        }
 	        System.out.println("Total is ::"+num);
         }
-	}
+	}*/
 }

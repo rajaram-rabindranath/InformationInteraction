@@ -33,10 +33,6 @@ public class Information
 	public static double PAI(HashMap<String,Integer> combo,HashMap<String,Integer> target,HashMap<String,Integer> combo_n_target,int count) throws IOException
 	{
 		double PAI=0.0f;
-		// debug
-		/*System.out.println("Ent combo "+Math_.entropy(combo,count));
-		System.out.println("Ent target "+Math_.entropy(target,count));
-		System.out.println("Ent combo_n_target "+Math_.entropy(combo_n_target,count));*/
 		PAI = Math_.entropy(combo,count) + Math_.entropy(target,count) - Math_.entropy(combo_n_target,count); 
 		return PAI;
 	}
@@ -51,13 +47,12 @@ public class Information
 	public static double PAI(HashMap<String,HashBag> mixedBag,HashBag combo,HashBag target,int rowCnt)
 	{
 		double PAI=0.0f;
-		System.out.println("row cnt is "+rowCnt);
 		double[][] targetMat=Math_.makeMatrix(target,rowCnt,1);
 		PAI=Math_.entropy(combo,rowCnt)+Math_.entropyCont_norm(targetMat,rowCnt)-Math_.entropyMixed_norm(mixedBag,rowCnt);
-		System.out.println("combo "+Math_.entropy(combo,rowCnt));
+		/*System.out.println("combo "+Math_.entropy(combo,rowCnt));
 		System.out.println("target "+Math_.entropyCont_norm(targetMat,rowCnt));
 		System.out.println("combo n target "+Math_.entropyMixed_norm(mixedBag,rowCnt));
-		System.out.println("The pai value is  "+PAI);
+		System.out.println("The pai value is  "+PAI);*/
 		return PAI;
 	}
 	
