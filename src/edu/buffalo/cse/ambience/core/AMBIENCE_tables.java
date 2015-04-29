@@ -10,7 +10,9 @@ public enum AMBIENCE_tables
 	stats("stats",new String[]{"A","B"}),
 	jobStats("jobStats",new String[]{"MapStats","RedStats"}),
 	topPAI("topPAI",new String[]{"infoMet"}),
-	topKWII("topKWII",new String[]{"infoMet"});
+	topKWII("topKWII",new String[]{"infoMet"}),
+	fwdMap("fwdMap",new String[]{"id","class"}),  
+	revMap("revMap",new String[]{"name","class"});
 	
 	private String tableName;
 	private String[] cf;
@@ -59,7 +61,7 @@ public enum AMBIENCE_tables
 		switch(ops)
 		{
 			case CONT:
-				//return AMBIENCE_tables.contingency;
+				return AMBIENCE_tables.contingency;
 			case ALL:
 				//need to return multiple tables
 				//return null;
@@ -69,7 +71,6 @@ public enum AMBIENCE_tables
 			case T:
 			case KWII:
 			case ENT:
-				//return AMBIENCE_tables.stats;
 			case PAI:
 				return AMBIENCE_tables.mutualInfo;
 			case NONE:

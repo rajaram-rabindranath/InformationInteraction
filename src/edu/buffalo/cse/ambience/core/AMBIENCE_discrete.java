@@ -24,6 +24,7 @@ import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwiiList;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_cumulative_skipper;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_higherOrder_more;
+import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_noBlackList;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_skipper;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_entropy;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_kwii;
@@ -143,12 +144,12 @@ public class AMBIENCE_discrete extends AMBIENCE
 		job.setJarByClass(this.getClass());;
 		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
-        job.setMapperClass(M_pai_cumulative_skipper.class);
-       // job.setCombinerClass(C_pai.class);
+        job.setMapperClass(M_pai_noBlackList.class);
+       // job.setCombinerClass(C_pai.class); // combiner switched off -- test this aspect
         job.setReducerClass(R_pai.class);
         TableMapReduceUtil.addDependencyJars(job);
         TableMapReduceUtil.addDependencyJars(job.getConfiguration());
-        TableMapReduceUtil.initTableMapperJob(srcTable,s, M_pai_cumulative_skipper.class, Text.class,Text.class,job);
+        TableMapReduceUtil.initTableMapperJob(srcTable,s, M_pai_noBlackList.class, Text.class,Text.class,job);
         job.waitForCompletion(true);
         return false;
 	}
@@ -160,7 +161,7 @@ public class AMBIENCE_discrete extends AMBIENCE
 		job.setJarByClass(this.getClass());;
 		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
-        job.setCombinerClass(C_pai.class);
+        job.setCombinerClass(C_pai.class); // FIXME -- need to test what would happen if we remove the combiner
         job.setMapperClass(M_higherOder_simple.class);
         job.setReducerClass(R_pai.class);
         TableMapReduceUtil.addDependencyJars(job);

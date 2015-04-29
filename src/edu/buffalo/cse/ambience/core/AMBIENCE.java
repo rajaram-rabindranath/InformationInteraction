@@ -124,26 +124,28 @@ public abstract class AMBIENCE
 	private boolean dbSetup(String tblSuffix,AMBIENCE_tables sink,AMBIENCE_tables src,AMBIENCE_tables jobStats)
 	{
 		
-		String srcTableName = src.getName()+tblSuffix;
-		String sinkTableName=sink.getName()+tblSuffix;
-		String jobStatsTableName=jobStats.getName()+tblSuffix;
+		String srcTblname=src.getName()+tblSuffix;
+		String sinkTblname=sink.getName()+tblSuffix;
+		String jobStatsTblname=jobStats.getName()+tblSuffix;
 		String[] srcColFams=src.getColFams();
 		String topKTblname=AMBIENCE_tables.topPAI.getName()+tblSuffix; 
-		boolean loadInvalid=true;
+		
 		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
-			loadInvalid=false;
+			HBase.setNegValueFilter(s,mrParams.get(MRParams.INVALID_VALUE));
 		
 		HBase = LibHBase.getInstance(hdfsConf);
 		s=HBase.getScanner(varList);
-		if(!HBase.createTable(srcTableName,srcColFams,splitCnt))return false;
+		if(!HBase.setupMapping(data.getColumns().c,tblSuffix)) return false;
+		System.out.println("Mapping tables created!");
+		if(!HBase.createTable(srcTblname,srcColFams,splitCnt))return false;
 		System.out.println("SRC TABLE CREATED");
-		if(!HBase.loadData(srcTableName,data.getColumns().c,data.getRows().r,srcColFams,loadInvalid))return false;
+		if(!HBase.loadData(srcTblname,data.getColumns().c,data.getRows().r,srcColFams))return false;
 		System.out.println("DATA LOADED");
-		if(!HBase.createTable(jobStatsTableName,jobStats.getColFams()))return false;
+		if(!HBase.createTable(jobStatsTblname,jobStats.getColFams()))return false;
 		System.out.println("JOBSTATS TABLE CREATED");
 		if(!HBase.createTable(topKTblname,AMBIENCE_tables.topPAI.getColFams()))return false;
 		System.out.println("TOPK TABLE CREATED");
-		if(!HBase.createTable(sinkTableName,sink.getColFams()))return false;
+		if(!HBase.createTable(sinkTblname,sink.getColFams()))return false;
 		System.out.println("SINK TABLE CREATED");
 		dbSetupDebug();
 		return true;
@@ -155,7 +157,7 @@ public abstract class AMBIENCE
 		String colFam=AMBIENCE_tables.source.getColFams()[0];
 		try{
 			HBase.displayRegionInfo(srctname);}
-		catch(IOException iex){System.out.println("problem in displain region info!!"); iex.printStackTrace();}
+		catch(IOException iex){System.out.println("problem in displayin region info!!"); iex.printStackTrace();}
 		System.out.println("----------------- SOME DEBUG DATA ---------------");
 		System.out.println("Number of columns for the MR jobs is "+data.getMRColsCnt());
 		System.out.println("Total number of rows in Source are "+HBase.getRowCnt(srctname,colFam));
@@ -174,8 +176,8 @@ public abstract class AMBIENCE
 		String[] src_cf =AMBIENCE_tables.source.getColFams();
 		try
 		{
-			Job job = new Job(conf,oper.toString());
-			//Job job = Job.getInstance(conf,oper.toString());
+			//Job job = new Job(conf,oper.toString());
+			Job job = Job.getInstance(conf,oper.toString());
 			job.setNumReduceTasks(Integer.valueOf(mrParams.get(MRParams.REDUCER_CNT))); // FIXME -- need to make this configurable
 			String sinkT=AMBIENCE_tables.getSinkT(oper).getName();
 			final long startMilli = System.currentTimeMillis();
