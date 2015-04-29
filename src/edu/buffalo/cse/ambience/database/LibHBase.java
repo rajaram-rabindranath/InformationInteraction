@@ -1,6 +1,11 @@
 package edu.buffalo.cse.ambience.database;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NavigableMap;
 import java.util.Set;
@@ -9,6 +14,8 @@ import orderly.DoubleWritableRowKey;
 import orderly.Order;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -24,8 +31,11 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.filter.BinaryComparator;
+import org.apache.hadoop.hbase.filter.ColumnCountGetFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
+import org.apache.hadoop.hbase.filter.ValueFilter;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -34,6 +44,8 @@ import org.apache.hadoop.io.DoubleWritable;
 
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.dataStructures.Columns;
+import edu.buffalo.cse.ambience.dataStructures.Constants;
+import edu.buffalo.cse.ambience.dataStructures.ContingencyT;
 import edu.buffalo.cse.ambience.dataStructures.Rows;
 import edu.buffalo.cse.ambience.dataStructures.Table;
 import edu.buffalo.cse.ambience.dataStructures.gyan;
@@ -61,6 +73,23 @@ public class LibHBase implements DBOps
 		
 	}
 	
+	// filter one particular value  -- FIXME
+	public void getID(String... ids) throws IOException
+	{	
+		HTable tbl=getTableHandler("src");
+		Scan s = new Scan();
+		for(String a : ids)
+		{
+			Filter f= new ValueFilter(CompareOp.EQUAL,new BinaryComparator(Bytes.toBytes(a)));
+			s.setFilter(f);
+			s.addColumn(Bytes.toBytes("name"),Bytes.toBytes("n"));
+			ResultScanner scanner = tbl.getScanner(s);
+			for (Result rr = scanner.next(); rr != null; rr = scanner.next()) 
+			{
+				System.out.println("Found row: " + rr);
+			}
+		}
+	}
 	
 
 	
@@ -75,7 +104,6 @@ public class LibHBase implements DBOps
 	}
 	
 	/**
-	 * 
 	 * @return
 	 */
 	public static LibHBase getInstance(Configuration hdfsConf) 
@@ -89,7 +117,6 @@ public class LibHBase implements DBOps
 	
 	
 	/**
-	 * 
 	 * @param milliseconds
 	 */
 	public void setTimeout(long milliseconds)
@@ -252,6 +279,25 @@ public class LibHBase implements DBOps
 		return s;
 	}
 	
+	public void setNegValueFilter(Scan s,String value)
+	{
+		Filter negFilter=new ValueFilter(CompareOp.NOT_EQUAL, new BinaryComparator(Bytes.toBytes(value)));
+		s.setFilter(negFilter);
+	}
+	
+	public void setPosValueFilter(Scan s,String value)
+	{
+		Filter negFilter=new ValueFilter(CompareOp.EQUAL, new BinaryComparator(Bytes.toBytes(value)));
+		s.setFilter(negFilter);
+	}
+	
+	
+	public void setColLimit(Scan s, int colLimt)
+	{
+		Filter filter = new ColumnCountGetFilter(colLimt);
+		s.setFilter(filter);
+	}
+	
 	/**
 	 * 
 	 * @return
@@ -338,10 +384,11 @@ public class LibHBase implements DBOps
    		return false;
    	}
    	
+   	
+   	
    /**
 	 * Create table in Hbase for storing data
 	 */
-	
 	public boolean createTable(String tableName, String[] colfams) 
 	{
 		Boolean retVal= true;
@@ -360,7 +407,6 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
-				//colDesc.setCompressionType(Compression.Algorithm.SNAPPY);
 				tableDescriptor.addFamily(colDesc);
 			}
 			admin.createTable(tableDescriptor);
@@ -424,7 +470,7 @@ public class LibHBase implements DBOps
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
 				System.out.println("Just trying out compression");
-				colDesc.setCompressionType(Compression.Algorithm.LZO);
+				//colDesc.setCompressionType(Compression.Algorithm.LZO);
 				tableDescriptor.addFamily(colDesc);
 			}
 			admin.createTable(tableDescriptor,splits);
@@ -472,26 +518,17 @@ public class LibHBase implements DBOps
 		return tableH;	
 	}
 	
-	enum table_ops
-	{
-		add,
-		print;
-	}
-	
 	public boolean printJobStats(String jobID)
 	{
 		String tablename= AMBIENCE_tables.jobStats.getName()+jobID;
 		String[] cf=AMBIENCE_tables.jobStats.getColFams();
-		
 		HTable table = null;
-		
 		try
 		{
 			table = new HTable(conf, tablename);
 			Scan scan = new Scan();
 			scan.setCaching(500);
 			scan.addFamily(Bytes.toBytes(cf[0]));
-			
 			System.out.println("------------- Mapper Stats ------------");
 			ResultScanner scanner = table.getScanner(scan);
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
@@ -510,13 +547,11 @@ public class LibHBase implements DBOps
 			    }
 			    System.out.println();
 			}
-			
 			scan = new Scan();
 			scan.setCaching(500);
 			scan.addFamily(Bytes.toBytes(cf[0]));
 			scan.addFamily(Bytes.toBytes(cf[1]));
 			scanner = table.getScanner(scan);
-			
 			System.out.println("------------- Reducer Stats ------------");
 			long acc=0;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
@@ -556,7 +591,6 @@ public class LibHBase implements DBOps
 	
 	public boolean readTable(String tableName, String colfam) 
 	{
-		
 		System.out.println("========================"+tableName+"=======================");
 		Table data = Table.getInstance();
 		HTable table = null;
@@ -567,7 +601,6 @@ public class LibHBase implements DBOps
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
 			scan.addFamily(Bytes.toBytes(colfam));
 			ResultScanner scanner = table.getScanner(scan);
-	
 			int counter=0;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
 			{
@@ -608,25 +641,82 @@ public class LibHBase implements DBOps
 	}
 
 	/**
+	 * Creates read-only tables for forward and reverse mapping 
+	 * 
+	 * @param tblname
+	 * @param colnames
+	 * @param ColFams
+	 * @return
+	 */
+	public boolean setupMapping(ArrayList<String> colnames,String tblSuffix) // FIXME -- in normal environs not required suffix
+	{
+		String tblFdwMap=AMBIENCE_tables.fwdMap.getName()+tblSuffix;
+		String tblRevMap=AMBIENCE_tables.revMap.getName()+tblSuffix;
+		byte[] fmapCf=Bytes.toBytes(AMBIENCE_tables.revMap.getColFams()[0]);
+		byte[] rmapCf=Bytes.toBytes(AMBIENCE_tables.fwdMap.getColFams()[0]);
+		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
+		if(!createTable(tblFdwMap,AMBIENCE_tables.fwdMap.getColFams())) return false;
+		if(!createTable(tblRevMap,AMBIENCE_tables.revMap.getColFams())) return false;
+		HTable fmap=null,rmap=null;
+		try
+		{
+			fmap=getTableHandler(tblFdwMap);
+			rmap=getTableHandler(tblRevMap);
+			fmap.getTableDescriptor().setReadOnly(true); // setting tables to be read-only
+			rmap.getTableDescriptor().setReadOnly(true);
+			Put fput=null,rput=null;
+			String id,col;
+			for(int i=0;i<colnames.size()-1;i++) // must not add trait as well !!
+			{
+				id=Integer.toString(i);
+				col=colnames.get(i);
+				fput=new Put(Bytes.toBytes(col));
+				fput.add(fmapCf,qual,Bytes.toBytes(id));
+				rput=new Put(Bytes.toBytes(id));
+				rput.add(rmapCf,qual,Bytes.toBytes(col));
+				fmap.put(fput);rmap.put(rput);
+			}
+		}
+		catch(IOException ioex)
+		{
+			ioex.printStackTrace();
+			System.out.println("MAPPING TABLES FAILURE!");
+			return false;
+		}
+		finally
+		{
+			try
+			{
+				if(fmap!=null)fmap.close();
+				if(rmap!=null)rmap.close();
+			}
+			catch(IOException ioex)
+			{
+				ioex.printStackTrace();
+				System.out.println("PROBLEMS CLOSING MAPPING TABLES!");
+			}
+		}
+		return true;
+	}
+	
+	/**
 	 * Load data into HBase table as specified in the arguments
 	 */
-	public boolean loadData(String tbl,ArrayList<String> colnames,
-			ArrayList<ArrayList<String>> rows,String colFams[],boolean loadInvalid) 
+	public boolean loadData(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[]) 
 	{
 		try
 		{
 			NavigableMap<HRegionInfo,ServerName> regions=getRegions(tbl);
 			int splitCnt=regions.size();
-			
 			if(splitCnt > 1)
 			{
 				Iterator<String> keysIterator = getRegStartKeys(getRegions(tbl)).iterator();
 				if(!keysIterator.hasNext()) return false;
-				if(!loadPolyLith(tbl,colnames,rows,colFams,splitCnt,keysIterator,loadInvalid)) return false;
+				if(!loadPolyLith(tbl,colnames,rows,colFams,splitCnt,keysIterator)) return false;
 			}
 			else
 			{
-				if(!loadMonoLith(tbl,colnames,rows,colFams,loadInvalid)) return false;
+				if(!loadMonoLith(tbl,colnames,rows,colFams)) return false;
 			}
 		}
 		catch(IOException iex)
@@ -639,8 +729,7 @@ public class LibHBase implements DBOps
 		
 	}
 	
-	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,
-			String[] colFams,boolean loadInvalid) throws IOException
+	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException
 	{
 		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
 		HTable table=getTableHandler(tbl);
@@ -650,17 +739,10 @@ public class LibHBase implements DBOps
 		for(int i=0;i<rows.size();i++)
 		{
 			ArrayList<String> currentRow =  rows.get(i);
-			Put objput = new Put(Bytes.toBytes("0"+i)); // to have all rows in order -- so that when we compare split vs !splits we have some notion
+			Put objput = new Put(Bytes.toBytes(i));
 			for(int j=0;j<colSize;j++)
 			{
-				if(loadInvalid)
-					objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
-				else
-				{
-					if(!currentRow.get(j).equals("-99")&loadInvalid)
-						objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
-				}
-				
+				objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
 			}
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
@@ -671,7 +753,7 @@ public class LibHBase implements DBOps
 	}
 	
 	private boolean loadPolyLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[],
-			int splitCnt,Iterator<String> keysIt,boolean loadInvalid) throws IOException
+			int splitCnt,Iterator<String> keysIt) throws IOException
 	{
 		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
 		HTable table = getTableHandler(tbl);
@@ -692,21 +774,12 @@ public class LibHBase implements DBOps
 			ArrayList<String> currentRow =  rows.get(i);
 			rowKey=prefix+suffix;
 			Put objput = new Put(Bytes.toBytes(rowKey));
-
 			for(int j=0;j<colSize;j++)
 			{
-				if(loadInvalid)
-					objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
-				else
-				{
-					if(!currentRow.get(j).equals("-99"))
-						objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
-				}
-					
+				objput.add(indVars, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(j)));
 			}
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
-
 			suffix++;
 			if(suffix > chunkSize && keysIt.hasNext() )
 			{
@@ -865,4 +938,49 @@ public class LibHBase implements DBOps
 		
 		return top;
 	}
+
+	@Override
+	public double computeKWII(ContingencyT cTbl) 
+	{
+		//ascertain order of the combination
+		
+		return 0;
+	}
+	
+	@Override
+	public double computePAI(ContingencyT cTble) 
+	{
+		//ascertain order of the combination
+		
+		return 0;
+	}
+
+	@Override
+	public ContingencyT getCTable(gyan g) 
+	{
+		// ascertain order ---
+		
+		// -- connect to contingency table and get contingency
+		
+		// -- fetch
+		
+		return null;
+	}
+
+	@Override
+	public ArrayList<Double> computeKWII(ArrayList<gyan> listg) 
+	{
+		//ascertain order of the combination
+		
+		return null;
+	}
+
+	@Override
+	public double computeEntropy(gyan g) 
+	{
+		// TODO Auto-generated method stub
+		return 0;
+	}
+	
+	
 }
