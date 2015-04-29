@@ -742,7 +742,7 @@ public class LibHBase implements DBOps
 			Put objput = new Put(Bytes.toBytes(i));
 			for(int j=0;j<colSize;j++)
 			{
-				objput.add(indVars, Bytes.toBytes(colnames.get(j)), Bytes.toBytes(currentRow.get(j)));
+				objput.add(indVars, Bytes.toBytes(Integer.toString(j)), Bytes.toBytes(currentRow.get(j)));
 			}
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
@@ -776,7 +776,7 @@ public class LibHBase implements DBOps
 			Put objput = new Put(Bytes.toBytes(rowKey));
 			for(int j=0;j<colSize;j++)
 			{
-				objput.add(indVars, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(j)));
+				objput.add(indVars, Bytes.toBytes(Integer.toString(j)), Bytes.toBytes(currentRow.get(j)));
 			}
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
