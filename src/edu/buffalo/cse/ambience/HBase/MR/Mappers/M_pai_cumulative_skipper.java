@@ -60,25 +60,21 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 	public void map(ImmutableBytesWritable row, Result values, Context context) throws IOException 
     {
 		NavigableMap<byte[],byte[]> origRowMap=values.getFamilyMap(Bytes.toBytes(src_cf[0]));
-		if(origRowMap.size()<k) return;
+		if(origRowMap.size()<k) return; // cannot build 3way if I have only 2 variables
 		HashMap<Integer,String> rowMap = new HashMap<Integer,String>();
 		String targetValue =new String(values.getFamilyMap(Bytes.toBytes(src_cf[1])).get(Bytes.toBytes(TARGET)));
-    	
     	int[] colMap=new int[origRowMap.keySet().size()]; // index will give actual colID
-    	
-    	
     	Set<byte[]> keys=origRowMap.keySet();
 		int position=0;
 		for(byte[] key:keys) // transform KV pairs
 		{
-			colMap[position]=Bytes.toInt(key);
+			colMap[position]=Integer.valueOf(Bytes.toString(key));
 			rowMap.put(position,new String(origRowMap.get(key)));
 			position++;
 		}
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
 		if(rowMap.size()!=nCols) // debug FIXME
     		System.out.println("COLS # does not match --- please chck "+rowMap.size()+" | "+nCols);
-		
 		rows.add(new RowObj(colMap, rowMap, targetValue));
     	numRecords++;
     }
@@ -96,7 +92,7 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 		HashMap<Text,HashBag> minicomboiner=new HashMap<Text,HashBag>();
 		Text key=null;
 		long iter=0;
-		int blacklistcnt=0;
+		
 		
 		if(numRecords != rows.size()) // DEBUG STATMENT -- FIXME log4j
 		{
@@ -115,7 +111,8 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
     		combo[i] = i;
     	
 		int index;
-		ArrayList<RowObj> blackList=new ArrayList<RowObj>();
+		//ArrayList<RowObj> blackList=new ArrayList<RowObj>();
+		// int blacklistcnt=0;
 		RowObj r;
 		do{	
 			iter++;
@@ -127,13 +124,13 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				// skipper
 				if(combo[k-1]>=r.colCnt)/** should i not process this row for current combination?**/
 				{
-					if(combo[0] >= r.colCnt - k)/** black-list this row and continue with next row] **/ 
+					/*if(combo[0] >= r.colCnt - k)*//** black-list this row and continue with next row] **//* 
 					{
 						blackList.add(r);
 						blacklistcnt++;
 						continue; 
 					}
-					else /** just continue, don't black-list this row yet, later maybe **/
+					else*/ /** just continue, don't black-list this row yet, later maybe **/
 						continue; 
 				}
 				
@@ -177,16 +174,16 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				}
 			}
 			
-			
+			/// FIXME -- have removed the blacklist module
 			/*if(blackList.size()>0) // FIXME DEBUG
 			{
 				System.out.println("["+combo[0]+"|"+combo[1]+"|"+combo[2]+"]"+" blackList"+blackList.size());
 			}
-			*/
-			/** remove black-listed row/s **/
+			
+			*//** remove black-listed row/s **//*
 			for(RowObj o:blackList)
 				rows.remove(o);
-			blackList.clear();
+			blackList.clear();*/
 			
 			/** get next combination **/
 			index=k-1;
@@ -200,11 +197,11 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				break; 
 			for(index = index + 1; index < k; ++index) 
 				combo[index] = combo[index - 1] + 1;
-		}while(blacklistcnt<numRecords); // FIXME -- break 2 lines above should take care of this 
+		}while(true); // FIXME -- break 2 lines above should take care of this blackListCnt < numRedcords 
 		
 		mapLogK="map";
 		mapLogV=mapperID+","+numRecords+","+iter;
 		context.write(new Text(mapLogK),new Text(mapLogV));
-		//System.out.println("BlackList count "+blacklistcnt);
+		//System.out.println("BlackList count "+blacklistcnt); -- FIXME no blacklisting 
 	}
 }

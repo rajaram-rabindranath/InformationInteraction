@@ -75,8 +75,7 @@ public class M_pai_skipper extends TableMapper<Text,Text>
 		int position=0;
 		for(byte[] key:keys) // transform KV pairs
 		{
-			//colMap[position]=Integer.valueOf(Bytes.toInt(bytes)(key));
-			colMap[position]=Bytes.toInt(key);
+			colMap[position]=Integer.valueOf(Bytes.toString(key));
 			rowMap.put(position,new String(origMap.get(key)));
 			position++;
 		}

@@ -1,15 +1,10 @@
 package edu.buffalo.cse.ambience.HBase.MR.Mappers;
-
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.hadoop.hbase.util.Bytes;
-
 import edu.buffalo.cse.ambience.dataStructures.Constants;
-
-
-
 class ComboObj 
 {
 	public String strC;
