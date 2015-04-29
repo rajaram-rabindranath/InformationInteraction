@@ -2,6 +2,8 @@ package edu.buffalo.cse.ambience.dataStructures;
 
 import java.util.regex.Pattern;
 
+import org.apache.hadoop.hbase.util.Bytes;
+
 public class Constants 
 {
 	public static final String COMB_SEP ="|"; 
@@ -13,4 +15,5 @@ public class Constants
 	public static final String MAP_KEY="map";
 	public static final String DELIM_COMMA=",";
 	public static final String DELIM_TAB="\t";
+	public static final String mapTblQual="map";
 }
