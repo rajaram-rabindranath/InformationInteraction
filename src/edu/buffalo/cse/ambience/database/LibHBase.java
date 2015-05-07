@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.Set;
 
@@ -16,6 +18,8 @@ import orderly.Order;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -50,18 +54,17 @@ import edu.buffalo.cse.ambience.dataStructures.Rows;
 import edu.buffalo.cse.ambience.dataStructures.Table;
 import edu.buffalo.cse.ambience.dataStructures.gyan;
 
-public class LibHBase implements DBOps
+public class LibHBase implements DBOps, ambienceDBops
 {
-	
-	private Configuration conf = null;
-	private Configuration hdfsConf = null;
-	private static LibHBase instance = null;
+	private Configuration conf=null;
+	private Configuration hdfsConf=null;
+	private static LibHBase instance=null;
 	private static final int DEFAULT_SCANNER_CACHING=500;
 	private boolean idem=false;
-	private static final String[] alphabets = {"A","B","C","D","E","F","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"};
-	private static final int alphaLen = alphabets.length;
-	
-	// configuration properties
+	private static final String[] alphabets={"A","B","C","D","E","F","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"};
+	private static final int alphaLen=alphabets.length;
+	private static String tblSuffix="";
+	private HashMap<String,HTable> tables=new HashMap<String,HTable>(); // HTable creation is costly 
 	private static final long DEFAULT_TIMEOUT=1800000*2; 
 	
 	/**
@@ -72,26 +75,6 @@ public class LibHBase implements DBOps
 	{
 		
 	}
-	
-	// filter one particular value  -- FIXME
-	public void getID(String... ids) throws IOException
-	{	
-		HTable tbl=getTableHandler("src");
-		Scan s = new Scan();
-		for(String a : ids)
-		{
-			Filter f= new ValueFilter(CompareOp.EQUAL,new BinaryComparator(Bytes.toBytes(a)));
-			s.setFilter(f);
-			s.addColumn(Bytes.toBytes("name"),Bytes.toBytes("n"));
-			ResultScanner scanner = tbl.getScanner(s);
-			for (Result rr = scanner.next(); rr != null; rr = scanner.next()) 
-			{
-				System.out.println("Found row: " + rr);
-			}
-		}
-	}
-	
-
 	
 	private LibHBase(Configuration hdfsConf) 
 	{
@@ -109,9 +92,7 @@ public class LibHBase implements DBOps
 	public static LibHBase getInstance(Configuration hdfsConf) 
 	{
 		if(instance == null)
-		{
 			instance = new LibHBase(hdfsConf);
-		}
 		return instance;
 	}
 	
@@ -156,9 +137,7 @@ public class LibHBase implements DBOps
 	private String getRegionBoundary(int i)
 	{
 		if(i > alphaLen-1)
-		{
 			return (int)Math.ceil((double)(i/alphaLen))+alphabets[(alphaLen-1)-i%(alphaLen)];
-		}
 		return alphabets[i];
 	}
 	
@@ -186,7 +165,74 @@ public class LibHBase implements DBOps
    		
    	}
    	
+   	/**
+   	 * Given a set of variable names (combination) return their ids [in sorted order]
+   	 * @param var
+   	 * @return
+   	 * @throws IOException
+   	 */
+   	public int[] getID(String... var) throws IOException
+	{
+   		String fwdMap=AMBIENCE_tables.fwdMap.getName();
+   		String[] fwdMapCF=AMBIENCE_tables.fwdMap.getColFams();
+   		byte[] colfam=Bytes.toBytes(fwdMapCF[0]);
+   		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
+   		HTable tbl = getTableHandler(fwdMap) ;
+		String[] mapped=new String[var.length];
+		Get g;
+		for(int i=0;i<var.length;i++)
+		{
+			g = new Get(Bytes.toBytes(var[i]));
+			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+		}
+		return sort(mapped);
+	}
    	
+   	/**
+   	 * 
+   	 * @param vals
+   	 * @return
+   	 */
+   	private int[] sort(int[] vals)
+   	{
+   		int[] sorted=new int[vals.length];
+   		return sorted;
+   	}
+   	
+   	/**
+   	 * 
+   	 * @param vals
+   	 * @return
+   	 */
+   	private int[] sort(String[] vals)
+   	{
+   		return null;
+   	}
+   	
+   	
+   	/**
+   	 * Given a set of ids returns variable names 
+   	 * @param ids
+   	 * @return
+   	 * @throws IOException
+   	 */
+   	public String[] getVar(int... ids) throws IOException
+	{
+   		String revMap=AMBIENCE_tables.revMap.getName();
+   		String[] revMapCF=AMBIENCE_tables.revMap.getColFams();
+   		byte[] colfam=Bytes.toBytes(revMapCF[0]);
+   		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
+   		HTable tbl= getTableHandler(revMap) ;
+		int[] sorted=sort(ids);
+		String[] mapped=new String[sorted.length];
+		Get g;
+		for(int i=0;i<mapped.length;i++)
+		{
+			g = new Get(Bytes.toBytes(sorted[i]));
+			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+		}
+		return mapped;
+	}
    	
    	/**
    	 * Non MR way of counting table row count
@@ -199,7 +245,7 @@ public class LibHBase implements DBOps
 		System.out.println("-------------- Table Row cnt ---------------");
 		try
 		{
-			table = new HTable(conf, tableName);
+			table = getTableHandler(tableName);
 			Scan scan = new Scan();
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
 	
@@ -279,13 +325,13 @@ public class LibHBase implements DBOps
 		return s;
 	}
 	
-	public void setNegValueFilter(Scan s,String value)
+	public void setRejectVal(Scan s,String value)
 	{
 		Filter negFilter=new ValueFilter(CompareOp.NOT_EQUAL, new BinaryComparator(Bytes.toBytes(value)));
 		s.setFilter(negFilter);
 	}
 	
-	public void setPosValueFilter(Scan s,String value)
+	public void setAcceptVal(Scan s,String value)
 	{
 		Filter negFilter=new ValueFilter(CompareOp.EQUAL, new BinaryComparator(Bytes.toBytes(value)));
 		s.setFilter(negFilter);
@@ -311,33 +357,6 @@ public class LibHBase implements DBOps
 		return s;
 	}
 	
-	/**
-   	 * 
-   	 * @param tableName
-   	 * @param colfam
-   	 * @param T
-   	 * @return
-   	 */
-   	public ResultScanner read(String tableName, String colfam)
-	{
-		try
-		{
-			HTable table = new HTable(conf, tableName);
-			Scan scan = new Scan();
-			scan.setCaching(100);
-	
-			scan.addFamily(Bytes.toBytes(colfam));
-			ResultScanner scanner = table.getScanner(scan);
-			return scanner;
-		}
-		catch(IOException ioex)
-		{
-			ioex.printStackTrace();
-			System.out.println("Cannot read data from :"+tableName);
-		}
-		return null;
-	}
-   	
    	/**
    	 * 
    	 * @param tableName
@@ -411,6 +430,7 @@ public class LibHBase implements DBOps
 			}
 			admin.createTable(tableDescriptor);
 			admin.close();
+			tables.put(tableName,getTableHandler(tableName)); // avoid creating many table handler
 		}
 		catch(MasterNotRunningException mex)
    		{
@@ -439,15 +459,13 @@ public class LibHBase implements DBOps
    				System.out.println("HAdmin is null!!!");
    			}
    		}
+		
 		return retVal;
 	}
 
 	/**
 	 * OverLoaded method
-	 * @param tableName
-	 * @param colfams
-	 * @param regions
-	 * @param maxid
+	 * 
 	 * @return
 	 */
 	public boolean createTable(String tableName, String[] colfams,int splitCnt) 
@@ -469,12 +487,13 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
-				System.out.println("Just trying out compression");
+				//System.out.println("Just trying out compression");
 				//colDesc.setCompressionType(Compression.Algorithm.LZO);
 				tableDescriptor.addFamily(colDesc);
 			}
 			admin.createTable(tableDescriptor,splits);
 			admin.close();
+			tables.put(tableName,getTableHandler(tableName));
 		}
 		catch(MasterNotRunningException mex)
    		{
@@ -511,11 +530,12 @@ public class LibHBase implements DBOps
 	 * @param tableName
 	 * @return
 	 */
-	public HTable getTableHandler(String tableName) throws IOException
+	public HTable getTableHandler(String tblname) throws IOException
 	{
-		HTable tableH = null;
-		tableH = new HTable(conf, tableName);
-		return tableH;	
+		//HTable table = tables.get(tblname);
+		//if(table==null)
+		return new HTable(conf,tblname);
+		//return table;	
 	}
 	
 	public boolean printJobStats(String jobID)
@@ -525,7 +545,7 @@ public class LibHBase implements DBOps
 		HTable table = null;
 		try
 		{
-			table = new HTable(conf, tablename);
+			table = getTableHandler(tablename);
 			Scan scan = new Scan();
 			scan.setCaching(500);
 			scan.addFamily(Bytes.toBytes(cf[0]));
@@ -596,7 +616,7 @@ public class LibHBase implements DBOps
 		HTable table = null;
 		try
 		{
-			table = new HTable(conf, tableName);
+			table = getTableHandler(tableName);
 			Scan scan = new Scan();
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
 			scan.addFamily(Bytes.toBytes(colfam));
@@ -652,8 +672,8 @@ public class LibHBase implements DBOps
 	{
 		String tblFdwMap=AMBIENCE_tables.fwdMap.getName()+tblSuffix;
 		String tblRevMap=AMBIENCE_tables.revMap.getName()+tblSuffix;
-		byte[] fmapCf=Bytes.toBytes(AMBIENCE_tables.revMap.getColFams()[0]);
-		byte[] rmapCf=Bytes.toBytes(AMBIENCE_tables.fwdMap.getColFams()[0]);
+		byte[] fmapCf=Bytes.toBytes(AMBIENCE_tables.fwdMap.getColFams()[0]);
+		byte[] rmapCf=Bytes.toBytes(AMBIENCE_tables.revMap.getColFams()[0]);
 		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
 		if(!createTable(tblFdwMap,AMBIENCE_tables.fwdMap.getColFams())) return false;
 		if(!createTable(tblRevMap,AMBIENCE_tables.revMap.getColFams())) return false;
@@ -662,8 +682,6 @@ public class LibHBase implements DBOps
 		{
 			fmap=getTableHandler(tblFdwMap);
 			rmap=getTableHandler(tblRevMap);
-			fmap.getTableDescriptor().setReadOnly(true); // setting tables to be read-only
-			rmap.getTableDescriptor().setReadOnly(true);
 			Put fput=null,rput=null;
 			String id,col;
 			for(int i=0;i<colnames.size()-1;i++) // must not add trait as well !!
@@ -676,6 +694,10 @@ public class LibHBase implements DBOps
 				rput.add(rmapCf,qual,Bytes.toBytes(col));
 				fmap.put(fput);rmap.put(rput);
 			}
+			tables.put(tblFdwMap,fmap);
+			tables.put(tblRevMap,rmap);
+			/*fmap.getTableDescriptor().setReadOnly(true);
+			rmap.getTableDescriptor().setReadOnly(true);*/
 		}
 		catch(IOException ioex)
 		{
@@ -702,7 +724,8 @@ public class LibHBase implements DBOps
 	/**
 	 * Load data into HBase table as specified in the arguments
 	 */
-	public boolean loadData(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[]) 
+	public boolean loadData(String tbl,ArrayList<String> colnames,
+			ArrayList<ArrayList<String>> rows,String colFams[]) 
 	{
 		try
 		{
@@ -729,7 +752,8 @@ public class LibHBase implements DBOps
 		
 	}
 	
-	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException
+	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,
+			ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException
 	{
 		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
 		HTable table=getTableHandler(tbl);
@@ -829,7 +853,7 @@ public class LibHBase implements DBOps
 		Result rs = null;
 		try
 		{
-			HTable table = new HTable(conf, tableName);
+			HTable table = getTableHandler(tableName);
 	        Get get = new Get(RowKey.getBytes());
 	        rs = table.get(get);
 	        if(rs == null || rs.isEmpty())
@@ -884,74 +908,60 @@ public class LibHBase implements DBOps
 		return false;
 	}
 
-	@Override
-	public ArrayList<gyan> topT(String tblname,int T,int korder) 
+	
+
+	private static double orderedRep(byte[] k,Order order) throws IOException
 	{
-		int LIMIT=0;
-		ArrayList<gyan> top=new ArrayList<gyan>(T);
-	    ImmutableBytesWritable buffer = new ImmutableBytesWritable();
+		ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 	    DoubleWritableRowKey d = new DoubleWritableRowKey();
-	    HTable table=null;
-	    try
+	    d.setOrder(order);
+	    buffer.set(k, 0, k.length);
+	    return ((DoubleWritable)d.deserialize(buffer)).get();
+	}
+	
+	@Override
+	public ArrayList<gyan> topT(int T,Order order)
+	{
+		ArrayList<gyan> top=new ArrayList<gyan>();
+		try
 		{
-	    	table =getTableHandler(tblname);
+			HTable table = getTableHandler("top");
 			Scan scan = new Scan();
-			scan.setCaching(DEFAULT_SCANNER_CACHING); 
-			Filter korderFilter = new SingleColumnValueFilter(Bytes.toBytes("inforMet"),Bytes.toBytes("k"),CompareOp.EQUAL,Bytes.toBytes(Integer.toString(korder)));
-			scan.setFilter(korderFilter);
-			scan.addFamily(Bytes.toBytes("infoMet"));
+			scan.setCaching(T); 
+			scan.setMaxVersions(Integer.MAX_VALUE);
 			ResultScanner scanner = table.getScanner(scan);
-			byte[] key;double value;
-			NavigableMap<byte[], byte[]> rowKV;
-			Get get;Result row;
+			int LIMIT=0;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
 			{
-				LIMIT++;
-				get = new Get(result.getRow());
-				get.setMaxVersions(Integer.MAX_VALUE);
-			    row = table.get(get);
-			    key=result.getRow();
-			    buffer.set(key, 0, key.length);
-			    value =((DoubleWritable)d.deserialize(buffer)).get();
-			    rowKV = row.getFamilyMap(Bytes.toBytes("infoMet"));
-			    Set<byte[]> entry =  rowKV.keySet();
-			    for(byte[] colKey : entry)
-			    	top.add(new gyan(Bytes.toString(rowKV.get(colKey)),value));
-			    if(LIMIT==T)break;
+				double rowKey=orderedRep(result.getRow(),Order.DESCENDING);
+			    List<Cell> values =result.getColumnCells(Bytes.toBytes("DATA"),Bytes.toBytes("ID"));
+			    for(Cell c: values)
+			    {	
+			    	top.add(new gyan(Bytes.toString(CellUtil.cloneValue(c)),rowKey));
+			    	if(++LIMIT==T)return top;
+			    }
 			}
 			table.close();
 		}
 		catch(IOException ioex)
 		{
 			ioex.printStackTrace();
-			System.out.println("Cannot read data from :"+tblname);
-			try
-			{
-				if(table!=null) table.close();
-			}
-			catch(IOException ex)
-			{
-				System.out.println("some error in closing table");
-			}
-			return top;
+			System.out.println("Problem accessing topT!!");
 		}
-		
 		return top;
 	}
-
+	
 	@Override
 	public double computeKWII(ContingencyT cTbl) 
 	{
 		//ascertain order of the combination
-		
 		return 0;
 	}
 	
 	@Override
-	public double computePAI(ContingencyT cTble) 
+	public double computePAI(ContingencyT cTbl) 
 	{
 		//ascertain order of the combination
-		
 		return 0;
 	}
 
@@ -982,5 +992,10 @@ public class LibHBase implements DBOps
 		return 0;
 	}
 	
+	public boolean exit()
+	{
+		// close all table handler before leaving
+		return true;
+	}
 	
 }
