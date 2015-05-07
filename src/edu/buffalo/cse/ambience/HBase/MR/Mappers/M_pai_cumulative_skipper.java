@@ -34,10 +34,7 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 	{
 		super.setup(context);
 		Configuration conf = context.getConfiguration();
-		// just for checking debug
 		String factor =conf.get("mapreduce.task.io.sort.factor");
-		System.out.println("The map io sort factor "+factor);
-		
 		mapperID= context.getTaskAttemptID().getTaskID().getId();
 		TARGET=conf.get(MRParams.TARGET_VAR.toString());
 		src_cf=AMBIENCE_tables.source.getColFams();
@@ -73,8 +70,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 			position++;
 		}
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
-		if(rowMap.size()!=nCols) // debug FIXME
-    		System.out.println("COLS # does not match --- please chck "+rowMap.size()+" | "+nCols);
 		rows.add(new RowObj(colMap, rowMap, targetValue));
     	numRecords++;
     }
@@ -133,7 +128,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 					else*/ /** just continue, don't black-list this row yet, later maybe **/
 						continue; 
 				}
-				
 				// Make K,V Pairs
 				currColMap=r.colMap;
 				currRowMap=r.rowMap;
@@ -151,7 +145,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				strValue.append(r.targetVal);
 				String val = strValue.toString();
 				HashBag Bag;
-				
 				/** any opportunity to combine -- exploited **/
 				if((Bag=minicomboiner.get(key))==null)
 				{
@@ -162,7 +155,6 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 					Bag.add(val);
 				
 			}
-			
 			/** emit K,V pairs **/
 			for(Text k:minicomboiner.keySet())
 			{
@@ -173,18 +165,10 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 					context.progress(); // for time out issues
 				}
 			}
-			
-			/// FIXME -- have removed the blacklist module
-			/*if(blackList.size()>0) // FIXME DEBUG
-			{
-				System.out.println("["+combo[0]+"|"+combo[1]+"|"+combo[2]+"]"+" blackList"+blackList.size());
-			}
-			
-			*//** remove black-listed row/s **//*
-			for(RowObj o:blackList)
+			/** remove black-listed row/s **/
+			/*for(RowObj o:blackList)
 				rows.remove(o);
 			blackList.clear();*/
-			
 			/** get next combination **/
 			index=k-1;
 			++combo[index];
@@ -197,11 +181,9 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				break; 
 			for(index = index + 1; index < k; ++index) 
 				combo[index] = combo[index - 1] + 1;
-		}while(true); // FIXME -- break 2 lines above should take care of this blackListCnt < numRedcords 
+		}while(true);  
 		
-		mapLogK="map";
 		mapLogV=mapperID+","+numRecords+","+iter;
-		context.write(new Text(mapLogK),new Text(mapLogV));
-		//System.out.println("BlackList count "+blacklistcnt); -- FIXME no blacklisting 
+		context.write(new Text(Constants.MAP_KEY),new Text(mapLogV));
 	}
 }
