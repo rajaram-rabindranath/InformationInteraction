@@ -24,7 +24,9 @@ enum UserArgs
 	TOP_COMBINATIONS_FLAG("x"),
 	TOP_T_FLAG("t"),
 	JOBID_FLAG("j"),
-	METRIC_ORDER_FLAG("z");
+	METRIC_ORDER_FLAG("z"),
+	FLUSH_INTERVAL("a");
+	
 	private String flag;
 	private UserArgs(String flag) 
 	{
@@ -67,6 +69,7 @@ public class CLI implements Arguments
 		options.addOption(UserArgs.METRIC_ORDER_FLAG.getFlag(),true,"Sort order of metric"); // FIXME need to catch this
 		options.addOption(UserArgs.TOP_T_FLAG.getFlag(),true,"Top T values of the metric being tracked");
 		options.addOption(UserArgs.TOP_COMBINATIONS_FLAG.getFlag(),true,"Top Combinations");
+		options.addOption(UserArgs.FLUSH_INTERVAL.getFlag(),true,"FLUSH INTERVAL");
 	}
 	
 	/**
@@ -176,6 +179,7 @@ public class CLI implements Arguments
 		setTopCombinations();
 		setVarList();
 		setOperation();
+		setFlushInterval();
 	}
 	
 	
@@ -211,6 +215,11 @@ public class CLI implements Arguments
 		return params.get(UserArgs.KWAY_FLAG);
 	}
 
+	
+	public String getFlushInterval()
+	{
+		return params.get(UserArgs.FLUSH_INTERVAL);
+	}
 	
 	public String getOperation() 
 	{
@@ -304,13 +313,20 @@ public class CLI implements Arguments
 	}
 
 	
+	private void setFlushInterval()
+	{
+		if(cmd.hasOption(UserArgs.FLUSH_INTERVAL.getFlag()))
+		{
+			params.put(UserArgs.FLUSH_INTERVAL,cmd.getOptionValue(UserArgs.FLUSH_INTERVAL.getFlag()));
+		}
+	}
+	
 	private void setOperation() 
 	{
 		if(cmd.hasOption(UserArgs.OPS_FLAG.getFlag()))
 		{
 			params.put(UserArgs.OPS_FLAG,cmd.getOptionValue(UserArgs.OPS_FLAG.getFlag()));
 		}
-		
 	}
 
 	
