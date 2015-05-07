@@ -16,15 +16,17 @@ import java.util.TreeMap;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.Lz4Codec;
+import org.apache.hadoop.io.compress.SnappyCodec;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.TaskReport;
 import org.apache.hadoop.mapreduce.TaskType;
 
-
-
-
+import com.hadoop.compression.lzo.LzoCodec;
 
 import edu.buffalo.cse.ambience.parameters.CLI;
 import edu.buffalo.cse.ambience.dataStructures.Columns;
@@ -54,9 +56,8 @@ public abstract class AMBIENCE
 	public abstract boolean skipC(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean iter(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean start();
-	
 	String fname,mode,strVarList,jobID,Kway,reducerCnt,invalid,TopCombos,TopTOrder,Tvalue;
-	int splitCnt;
+	int splitCnt,flushInterval;
 	boolean haveVarList=false;
 	
 	public AMBIENCE(CLI cli,Configuration conf)
@@ -79,6 +80,10 @@ public abstract class AMBIENCE
 		TopCombos=cli.getTopCombinations();
 		TopTOrder=cli.getTopTOrder();
 		Tvalue=cli.getTvalue();
+		if(cli.getFlushInterval()!=null)
+		{
+			flushInterval=Integer.valueOf(cli.getFlushInterval());
+		}
 		if(haveVarList=cli.hasVarList())
 			strVarList=cli.getVarList();
 	}
@@ -110,6 +115,7 @@ public abstract class AMBIENCE
 		mrParams.put(MRParams.TOP_COMBINATIONS,TopCombos);
 		mrParams.put(MRParams.METRIC_ORDER,TopTOrder);
 		mrParams.put(MRParams.TARGET_VAR,data.getColumns().getTargetVar());
+		mrParams.put(MRParams.FLUSH_INTERVAL,Integer.toString(flushInterval));
 		
 		AMBIENCE_tables sinkT=AMBIENCE_tables.getSinkT(oper);
 		AMBIENCE_tables srcT=AMBIENCE_tables.source;
@@ -128,13 +134,15 @@ public abstract class AMBIENCE
 		String sinkTblname=sink.getName()+tblSuffix;
 		String jobStatsTblname=jobStats.getName()+tblSuffix;
 		String[] srcColFams=src.getColFams();
-		String topKTblname=AMBIENCE_tables.topPAI.getName()+tblSuffix; 
+		String topTTblname=AMBIENCE_tables.top.getName()+tblSuffix; 
 		
-		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
-			HBase.setNegValueFilter(s,mrParams.get(MRParams.INVALID_VALUE));
 		
 		HBase = LibHBase.getInstance(hdfsConf);
 		s=HBase.getScanner(varList);
+		
+		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
+			HBase.setRejectVal(s,mrParams.get(MRParams.INVALID_VALUE));
+		
 		if(!HBase.setupMapping(data.getColumns().c,tblSuffix)) return false;
 		System.out.println("Mapping tables created!");
 		if(!HBase.createTable(srcTblname,srcColFams,splitCnt))return false;
@@ -143,7 +151,7 @@ public abstract class AMBIENCE
 		System.out.println("DATA LOADED");
 		if(!HBase.createTable(jobStatsTblname,jobStats.getColFams()))return false;
 		System.out.println("JOBSTATS TABLE CREATED");
-		if(!HBase.createTable(topKTblname,AMBIENCE_tables.topPAI.getColFams()))return false;
+		if(!HBase.createTable(topTTblname,AMBIENCE_tables.top.getColFams()))return false;
 		System.out.println("TOPK TABLE CREATED");
 		if(!HBase.createTable(sinkTblname,sink.getColFams()))return false;
 		System.out.println("SINK TABLE CREATED");
@@ -177,6 +185,15 @@ public abstract class AMBIENCE
 		try
 		{
 			//Job job = new Job(conf,oper.toString());
+			conf.setBoolean("mapreduce.compress.map.output",true);
+			conf.setClass("mapreduce.map.output.compress.codec",SnappyCodec.class, CompressionCodec.class);
+			
+			// set io percent thingy
+			/*mapreduce.task.io.sort.mb
+			mapreduce.task.io.sort.factor
+			mapreduce.reduce.shuffle.merge.percent
+			mapreduce.reduce.shuffle.input.buffer.percent*/
+
 			Job job = Job.getInstance(conf,oper.toString());
 			job.setNumReduceTasks(Integer.valueOf(mrParams.get(MRParams.REDUCER_CNT))); // FIXME -- need to make this configurable
 			String sinkT=AMBIENCE_tables.getSinkT(oper).getName();
@@ -509,9 +526,8 @@ public abstract class AMBIENCE
 			while(nextCombination(comb, n, k))
 				subsets.add(comb.clone());
 		}
-		for(int i=0;i<n;i++)
+		for(int i=0;i<n;i++) // all nC1 is added here
 			subsets.add(new int[]{i});
-		
 		return subsets;
 	}
 }

@@ -9,8 +9,7 @@ public enum AMBIENCE_tables
 	source("table",new String[]{"indVars","targetVar"}), // should this be discrete vs continuous
 	stats("stats",new String[]{"A","B"}),
 	jobStats("jobStats",new String[]{"MapStats","RedStats"}),
-	topPAI("topPAI",new String[]{"infoMet"}),
-	topKWII("topKWII",new String[]{"infoMet"}),
+	top("top",new String[]{"DATA"}),
 	fwdMap("fwdMap",new String[]{"id","class"}),  
 	revMap("revMap",new String[]{"name","class"});
 	

@@ -21,10 +21,13 @@ import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_entropy;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_higherOder_simple;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwii;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwiiList;
+import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwii_raja;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_cumulative_skipper;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_higherOrder_more;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_noBlackList;
+import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_periodic;
+import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_rush;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_skipper;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_entropy;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_kwii;
@@ -53,13 +56,15 @@ public class AMBIENCE_discrete extends AMBIENCE
 	@Override
 	public boolean kwii(Job job, String sinkT) throws IOException,InterruptedException, ClassNotFoundException 
 	{
+		job.setJarByClass(this.getClass());
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
+		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
         job.setMapperClass(M_kwii.class);
-        job.setCombinerClass(C_kwii.class);
+        //job.setCombinerClass(C_kwii.class);
         job.setReducerClass(R_kwii.class);
         TableMapReduceUtil.addDependencyJars(job);
         TableMapReduceUtil.addDependencyJars(job.getConfiguration());
-        TableMapReduceUtil.initTableMapperJob(AMBIENCE_tables.source.getName(),s, M_kwii.class, Text.class,Text.class,job);
+        TableMapReduceUtil.initTableMapperJob(srcTable,s, M_kwii.class, Text.class,Text.class,job);
         job.waitForCompletion(true);
         return false;
 	}
@@ -144,12 +149,14 @@ public class AMBIENCE_discrete extends AMBIENCE
 		job.setJarByClass(this.getClass());;
 		String srcTable=AMBIENCE_tables.source.getName()+cli.getJobID();
 		job.setOutputFormatClass(MultiTableOutputFormat.class);
-        job.setMapperClass(M_pai_noBlackList.class);
-       // job.setCombinerClass(C_pai.class); // combiner switched off -- test this aspect
+       // job.setMapperClass(M_pai_rush.class);
+        job.setMapperClass(M_pai_periodic.class);
+        //job.setCombinerClass(C_pai.class); 
         job.setReducerClass(R_pai.class);
         TableMapReduceUtil.addDependencyJars(job);
         TableMapReduceUtil.addDependencyJars(job.getConfiguration());
-        TableMapReduceUtil.initTableMapperJob(srcTable,s, M_pai_noBlackList.class, Text.class,Text.class,job);
+        //TableMapReduceUtil.initTableMapperJob(srcTable,s, M_pai_rush.class, Text.class,Text.class,job);
+        TableMapReduceUtil.initTableMapperJob(srcTable,s, M_pai_periodic.class, Text.class,Text.class,job);
         job.waitForCompletion(true);
         return false;
 	}
