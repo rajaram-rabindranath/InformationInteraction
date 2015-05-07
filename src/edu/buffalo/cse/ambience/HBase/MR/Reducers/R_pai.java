@@ -33,6 +33,7 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 	int reducerID =0;
 	static int numkeys=0;
 	
+	
 	/**
 	 * 
 	 */
@@ -45,15 +46,15 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		String jobID = conf.get(MRParams.JOBID.toString());
 		jobStatsT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
 		sinkT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));;
-		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.topPAI.getName()+jobID));;
+		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.top.getName()+jobID));;
 		
-		System.out.println("Time out string val"+conf.get("mapreduce.task.timeout"));
+		//System.out.println("Time out string val"+conf.get("mapreduce.task.timeout"));
 		// just for checking debug
 		String factor =conf.get("mapreduce.task.io.sort.factor");
-		System.out.println("The map io sort factor "+factor);
+		//System.out.println("The map io sort factor "+factor);
 		long timeout=0;
 		conf.getLong("mapreduce.task.timeout",timeout);
-		System.out.println("The time out val according to getong is "+timeout);
+		//System.out.println("The time out val according to getong is "+timeout);
 	}
 	
 	/**
@@ -68,16 +69,16 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		HashBag combo =new HashBag();
 		HashBag combo_n_target =new HashBag();
 		HashBag target =new HashBag();
+		target.clear();combo.clear();combo_n_target.clear();
 		StringBuilder comboVal=new StringBuilder();
 		StringBuilder targetVal=new StringBuilder();
 		int count=0;
 		
 		// debug code to check
-		if(key.toString().equals("map"))
+		if(key.toString().equals(Constants.MAP_KEY))
 		{
 			Put put;
 			byte[] colfam_=Bytes.toBytes(AMBIENCE_tables.jobStats.getColFams()[0]);
-			/*mapLogV=mapperID+","+numRecords+","+iter;*/
 			for(Text val:values)
 			{
 				String strVal=val.toString();
@@ -113,13 +114,9 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
         	target.add(targetVal.toString(),cnt);
         	count+=cnt;
         }
-		//System.out.println("=============================="+key+"============================");
-	    /*debug(combo_n_target);
-	    debug(target);
-	    debug(combo);*/
+		
+		
     	double PAI = Information.PAI(combo, target, combo_n_target, count);
-    	
-    	/**/
     	Put put = new Put(Bytes.toBytes(key.toString()));
     	put.add(colfam,qual,Bytes.toBytes(Double.toString(PAI)));
     	numkeys++;
@@ -141,7 +138,13 @@ public class R_pai extends TableReducer<Text,Text, ImmutableBytesWritable>
 		context.progress();
 	}
 	
-	/*public void debug(HashBag n)
+	
+	//System.out.println("=============================="+key+"============================");
+    /*debug(combo_n_target);
+    debug(target);
+    debug(combo);*/
+	
+/*	public void debug(HashBag n)
 	{
 		{
 	        System.out.println("********************************************");

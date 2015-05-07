@@ -47,7 +47,7 @@ public abstract class AbstractReducer extends TableReducer<Text,Text, ImmutableB
 		String jobID = conf.get(MRParams.JOBID.toString());
 		jobStatsT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
 		sinkT=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));;
-		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.topPAI.getName()+jobID));;
+		top=new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.top.getName()+jobID));;
 	}
 	
 	@Override
@@ -57,7 +57,7 @@ public abstract class AbstractReducer extends TableReducer<Text,Text, ImmutableB
 	protected void cleanup(Context context) throws IOException, InterruptedException
 	{
 		// committing top k vals
-		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.topPAI.getColFams()[1]);
+		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.top.getColFams()[1]);
 		byte[] qual=Bytes.toBytes("PAI");
 		for(gyan g : findT.asList())
 		{

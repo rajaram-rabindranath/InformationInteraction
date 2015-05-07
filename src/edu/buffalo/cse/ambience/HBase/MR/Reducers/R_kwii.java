@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Set;
 
+import org.apache.commons.collections.bag.HashBag;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
@@ -26,19 +27,26 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
 	static int numkeys;
 	static final byte[] colfam=Bytes.toBytes(AMBIENCE_tables.mutualInfo.getColFams()[0]);
 	static final byte[] qual=Bytes.toBytes("KWII");
-	static final ImmutableBytesWritable sinkT = new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()));
-	static final ImmutableBytesWritable jobStatsT = new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()));
+	static ImmutableBytesWritable sinkT;
+	static ImmutableBytesWritable jobStatsT;
+	HashBag Kway = new HashBag();
+	HashMap<int [],HashBag> subsets =  new HashMap<int[],HashBag>();
+	StringBuilder val=new StringBuilder();
 	int reducerID =0;
 	@Override
 	protected void setup(Context context) throws IOException, InterruptedException 
 	{
 		super.setup(context);
 		reducerID= context.getTaskAttemptID().getTaskID().getId();
+		
 		Configuration conf = context.getConfiguration();
-		targetVar=conf.get(MRParams.TARGET_VAR.toString());
+		String jobID = conf.get(MRParams.JOBID.toString());
+		
+		sinkT = new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.mutualInfo.getName()+jobID));
+		jobStatsT = new ImmutableBytesWritable(Bytes.toBytes(AMBIENCE_tables.jobStats.getName()+jobID));
 		try
 		{
-			k = Integer.valueOf(conf.get(MRParams.K_WAY.toString()));
+			k = Integer.valueOf(conf.get(MRParams.K_WAY.toString())); // tests have to made by executJob() in AMBIENCE.java -- FIXME
 		}
 		catch(NumberFormatException nex)
 		{
@@ -50,9 +58,26 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
 	public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException 
 	{
 		numkeys++;
-		HashMap<String,Integer> kwayCounts = new HashMap<String,Integer>();
-		HashMap<int [],HashMap<String,Integer>> subsets =  new HashMap<int[],HashMap<String,Integer>>();
+		Kway.clear();subsets.clear();// Need to maintain a pool of HashBags and reuse them
 		
+		
+		// debug code to check
+		if(key.toString().equals(Constants.MAP_KEY))
+		{
+			Put put;
+			byte[] colfam_=Bytes.toBytes(AMBIENCE_tables.jobStats.getColFams()[0]);
+			for(Text val:values)
+			{
+				String strVal=val.toString();
+				String[] splits=strVal.split(",");
+				put=new Put(Bytes.toBytes(splits[0]));// key
+				put.add(colfam_,Bytes.toBytes("#recs"),Bytes.toBytes(splits[1]));
+				put.add(colfam_,Bytes.toBytes("#iter"),Bytes.toBytes(splits[2]));
+				context.write(jobStatsT, put);
+			}
+			context.progress();
+			return;
+		}
 		/**************************************************************
         * We have a k-way[key] combination -- we need
         * 1. <k choose c> combinations, where c varies from k-1 to 1
@@ -61,7 +86,8 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
         **************************************************************/
         for(int[] comb :AMBIENCE.kwiiSubsets(k))
         {
-        	subsets.put(comb,new HashMap<String,Integer>());
+        	//subsets.put(comb,new HashMap<String,Integer>());
+        	subsets.put(comb, new HashBag());
         }
 		Set<int[]> subsetKeys= subsets.keySet();
 		String[] valSplits;
@@ -78,45 +104,29 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
 		{
 			split = v.toString().split(",");
 			cnt=Integer.valueOf(split[1]);
+			Kway.add(split[0],cnt);// accumulating kway statistics
 			
-			/** accumulating kway statistics **/
-			if(kwayCounts.containsKey(split[0])) 
-				kwayCounts.put(split[0],kwayCounts.get(split[0])+cnt);
-			else
-				kwayCounts.put(split[0],cnt);
-			
-			valSplits=split[0].split(Constants.VAL_SPLIT);
 			/***************************************************************
 			 * For each subset <key> of Kway --
 			 * 1. Construct <value> 
 			 * 2. Keep a running count of the <value> for the given <key> 
 			 **************************************************************/
+			valSplits=split[0].split(Constants.VAL_SPLIT);
+			HashBag valBag;
 			for(int[] comb:subsetKeys)
 			{
-				StringBuilder val=new StringBuilder();
-				try
+				val.setLength(0);
+				for(int i : comb)
 				{
-					for(int i : comb)
-					{
-						val.append(valSplits[i]);
-						val.append(Constants.VAL_SEP);
-					}
-					
-					HashMap<String,Integer> valMap=subsets.get(comb);
-					String n=val.toString();
-					if(valMap.containsKey(n))
-						valMap.put(n, valMap.get(n)+cnt);
-					else
-						valMap.put(n,cnt);
+					val.append(valSplits[i]);
+					val.append(Constants.VAL_SEP);
 				}
-				catch(NumberFormatException nex)
-				{
-					nex.printStackTrace();
-				}
+				valBag=subsets.get(comb);
+				valBag.add(val.toString(),cnt);
 			}
 			total+=cnt;
 		}
-		double kwii = Information.KWII(k,kwayCounts,subsets,total);
+		double kwii = Information.KWII(k,Kway,subsets,total);
     	Put put = new Put(Bytes.toBytes(key.toString()));
     	put.add(colfam,qual,Bytes.toBytes(Double.toString(kwii)));
     	context.write(sinkT, put);
@@ -127,7 +137,7 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
 	protected void cleanup(Context context) throws IOException, InterruptedException
 	{
 		Put put=new Put(Bytes.toBytes(Integer.toString(reducerID)));
-		byte[] colfam=Bytes.toBytes("RedKeys");
+		byte[] colfam=Bytes.toBytes("RedStats");
 		byte[] qual=Bytes.toBytes("Count");
 		put.add(colfam,qual,Bytes.toBytes(Integer.toString(numkeys)));
 		context.write(jobStatsT, put);
