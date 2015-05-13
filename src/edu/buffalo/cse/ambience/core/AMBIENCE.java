@@ -139,7 +139,7 @@ public abstract class AMBIENCE
 		
 		HBase = LibHBase.getInstance(hdfsConf);
 		s=HBase.getScanner(varList);
-		
+		HBase.setTblSuffix(tblSuffix);
 		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
 			HBase.setRejectVal(s,mrParams.get(MRParams.INVALID_VALUE));
 		

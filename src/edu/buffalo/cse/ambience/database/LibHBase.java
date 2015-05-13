@@ -46,6 +46,8 @@ import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.DoubleWritable;
 
+import com.sun.corba.se.pept.transport.InboundConnectionCache;
+
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.dataStructures.Columns;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
@@ -114,6 +116,10 @@ public class LibHBase implements DBOps, ambienceDBops
 		return conf;
 	}
 
+	public void setTblSuffix(String suffix)
+	{
+		tblSuffix=suffix;
+	}
 	/**
 	 * 
 	 * @param serverCnt
@@ -154,26 +160,56 @@ public class LibHBase implements DBOps, ambienceDBops
    	}
    	
    	/**
-   	 * 
-   	 * @param tbl
-   	 * @param dumpName
-   	 * @param colfam
-   	 * @param qual
-   	 */
-   	public void tableDump(String tbl,String dumpName,String colfam,String qual)
-   	{
-   		
-   	}
-   	
-   	/**
    	 * Given a set of variable names (combination) return their ids [in sorted order]
    	 * @param var
    	 * @return
    	 * @throws IOException
    	 */
-   	public int[] getID(String... var) throws IOException
+	public ArrayList<String> getID(ArrayList<String> many,String delim) throws IOException,NumberFormatException
+   	{
+   		ArrayList<String> trans=new ArrayList<String>();
+   		String rslt;
+   		for(String t : many)
+   		{
+   			if((rslt=getID(t,delim))!=null)
+   				trans.add(rslt);
+   		}
+   		return trans;
+   	}
+	
+	/**
+	 * 
+	 * @param combination
+	 * @param delim
+	 * @return
+	 * @throws IOException
+	 * @throws NumberFormatException
+	 */
+   	public String getID(String combination,String delim) throws IOException,NumberFormatException
+   	{
+   		if(combination==null) return null;
+   		String[] splits= combination.split(delim);
+   		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
+   		String[] rslt=getID(splits);
+   		StringBuilder b =new StringBuilder();
+   		b.setLength(0);
+		for(int i=0;i<rslt.length-1;i++)
+		{
+			b.append(rslt[i]);b.append(Constants.COMB_SEP);
+		}
+		b.append(rslt[rslt.length-1]);
+   		return b.toString();
+   	}
+   	
+   	/**
+   	 * 
+   	 * @param var
+   	 * @return
+   	 * @throws IOException
+   	 */
+   	private String[] getID(String... var) throws IOException
 	{
-   		String fwdMap=AMBIENCE_tables.fwdMap.getName();
+   		String fwdMap=AMBIENCE_tables.fwdMap.getName()+tblSuffix;
    		String[] fwdMapCF=AMBIENCE_tables.fwdMap.getColFams();
    		byte[] colfam=Bytes.toBytes(fwdMapCF[0]);
    		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
@@ -184,56 +220,90 @@ public class LibHBase implements DBOps, ambienceDBops
 		{
 			g = new Get(Bytes.toBytes(var[i]));
 			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+			if(mapped[i]==null) return null; // if entity not present
 		}
-		return sort(mapped);
+		sort(mapped);
+		return mapped;
 	}
    	
-   	/**
-   	 * 
-   	 * @param vals
-   	 * @return
-   	 */
-   	private int[] sort(int[] vals)
-   	{
-   		int[] sorted=new int[vals.length];
-   		return sorted;
-   	}
    	
-   	/**
-   	 * 
-   	 * @param vals
-   	 * @return
-   	 */
-   	private int[] sort(String[] vals)
-   	{
-   		return null;
-   	}
-   	
-   	
-   	/**
+	/**
    	 * Given a set of ids returns variable names 
    	 * @param ids
    	 * @return
    	 * @throws IOException
    	 */
-   	public String[] getVar(int... ids) throws IOException
+   	public ArrayList<String> getVar(ArrayList<String> many,String delim) throws IOException,NumberFormatException
+   	{
+   		ArrayList<String> trans=new ArrayList<String>();
+   		String rslt;
+   		for(String t : many)
+   		{
+   			if((rslt=getVar(t,delim))!=null)
+   				trans.add(rslt);
+   		}
+   		return trans;
+   	}
+   	
+   	/**
+   	 * 
+   	 * @param combination
+   	 * @param delim
+   	 * @return
+   	 * @throws IOException
+   	 * @throws NumberFormatException
+   	 */
+   	private String getVar(String combination,String delim) throws IOException,NumberFormatException
+   	{
+   		if(combination==null) return null;
+   		String[] splits= combination.split(delim);
+   		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
+   		String[] rslt=getVar(splits);
+   		StringBuilder b =new StringBuilder();
+   		b.setLength(0);
+		for(int i=0;i<rslt.length-1;i++)
+		{
+			b.append(rslt[i]);b.append(Constants.COMB_SEP);
+		}
+		b.append(rslt[rslt.length-1]);
+   		return b.toString(); 
+   	}
+   	
+   	/**
+   	 * 
+   	 * @param ids
+   	 * @return
+   	 * @throws IOException
+   	 */
+   	public String[] getVar(String... ids) throws IOException
 	{
-   		String revMap=AMBIENCE_tables.revMap.getName();
+   		String revMap=AMBIENCE_tables.revMap.getName()+tblSuffix;
    		String[] revMapCF=AMBIENCE_tables.revMap.getColFams();
    		byte[] colfam=Bytes.toBytes(revMapCF[0]);
    		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
    		HTable tbl= getTableHandler(revMap) ;
-		int[] sorted=sort(ids);
-		String[] mapped=new String[sorted.length];
+   		sort(ids);
+		String[] mapped=new String[ids.length];
 		Get g;
 		for(int i=0;i<mapped.length;i++)
 		{
-			g = new Get(Bytes.toBytes(sorted[i]));
+			g = new Get(Bytes.toBytes(ids[i]));
 			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+			if(mapped[i]==null) return null; // if entity not present
 		}
 		return mapped;
 	}
    	
+   	
+   	/**
+   	 * 
+   	 */
+   	private void findCommon(int[][] candidates)
+   	{
+   		
+   	}
+   	
+   
    	/**
    	 * Non MR way of counting table row count
    	 * @param tableName
@@ -919,6 +989,8 @@ public class LibHBase implements DBOps, ambienceDBops
 	    return ((DoubleWritable)d.deserialize(buffer)).get();
 	}
 	
+	
+	
 	@Override
 	public ArrayList<gyan> topT(int T,Order order)
 	{
@@ -931,13 +1003,15 @@ public class LibHBase implements DBOps, ambienceDBops
 			scan.setMaxVersions(Integer.MAX_VALUE);
 			ResultScanner scanner = table.getScanner(scan);
 			int LIMIT=0;
+			String key;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
 			{
-				double rowKey=orderedRep(result.getRow(),Order.DESCENDING);
+				double metric=orderedRep(result.getRow(),Order.DESCENDING);
 			    List<Cell> values =result.getColumnCells(Bytes.toBytes("DATA"),Bytes.toBytes("ID"));
 			    for(Cell c: values)
 			    {	
-			    	top.add(new gyan(Bytes.toString(CellUtil.cloneValue(c)),rowKey));
+			    	key=Bytes.toString(CellUtil.cloneValue(c));
+			    	top.add(new gyan(key,getVar(key,Constants.COMB_SPLIT),metric));
 			    	if(++LIMIT==T)return top;
 			    }
 			}
@@ -998,4 +1072,83 @@ public class LibHBase implements DBOps, ambienceDBops
 		return true;
 	}
 	
+	
+	/**
+   	 * 
+   	 * @param mapped
+   	 * @return
+   	 */
+   	private void sort(String[] ele)
+   	{
+   		int length=ele.length;
+   		int[] sorted=new int[ele.length];
+   		for(int i=0;i<length;i++)
+   			sorted[i]=Integer.valueOf(ele[i]);
+   		sort(sorted,0,length-1);
+   		for(int i=0;i<ele.length;i++)
+   				ele[i]=Integer.toString(sorted[i]);
+   	}
+   	
+   	/**
+   	 * 
+   	 * @param vals
+   	 * @return
+   	 */
+   	private void sort(int[] array,int lowerIndex, int higherIndex)
+   	{
+   		int i = lowerIndex;
+        int j = higherIndex;
+        int pivot = array[lowerIndex+(higherIndex-lowerIndex)/2];
+        while (i <= j) 
+        {
+            while (array[i] < pivot) 
+                i++;
+            while (array[j] > pivot) 
+                j--;
+            if (i <= j)
+            {
+            	int temp = array[i];
+                array[i] = array[j];
+                array[j] = temp;
+                i++;
+                j--;
+            }
+        }
+        if (lowerIndex < j)
+            	sort(array,lowerIndex, j);
+        if (i < higherIndex)
+            	sort(array,i, higherIndex);
+   	}
+   	
+   	
+   	public void tstMapping() throws IOException, NumberFormatException
+   	{
+   		ArrayList<String> tst=new ArrayList<String>();
+		tst.add("15|0|1");
+		tst.add("15|1|0");
+		tst.add("1|15|0");
+		tst.add("1|0|15");
+		tst.add("0|1|15");
+		tst.add("0|15|1");
+		ArrayList<String> str;
+		str=getVar(tst, "\\|");
+		for(String s: str)
+		{
+			System.out.println("we are getting "+s);
+		}
+		
+		tst.clear();
+		
+		tst.add("044892|044356|044376");
+		tst.add("044892|044376|044356");
+		tst.add("044376|044892|044356");
+		tst.add("044376|044356|044892");
+		tst.add("044356|044376|044892");
+		tst.add("044356|044892|044376");
+		str = getID(tst,"\\|");
+		for(String s: str)
+		{
+			System.out.println("we are getting "+s);
+		}
+   	}
 }
