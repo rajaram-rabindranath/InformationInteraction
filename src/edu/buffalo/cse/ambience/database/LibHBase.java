@@ -1,14 +1,9 @@
 package edu.buffalo.cse.ambience.database;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 
@@ -16,10 +11,6 @@ import orderly.DoubleWritableRowKey;
 import orderly.Order;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -38,27 +29,22 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
 import org.apache.hadoop.hbase.filter.ColumnCountGetFilter;
 import org.apache.hadoop.hbase.filter.Filter;
-import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
+import org.apache.hadoop.hbase.filter.FilterList;
+import org.apache.hadoop.hbase.filter.QualifierFilter;
 import org.apache.hadoop.hbase.filter.ValueFilter;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.DoubleWritable;
 
-import com.sun.corba.se.pept.transport.InboundConnectionCache;
-
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
-import edu.buffalo.cse.ambience.dataStructures.Columns;
+import edu.buffalo.cse.ambience.core.MRParams;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
-import edu.buffalo.cse.ambience.dataStructures.ContingencyT;
-import edu.buffalo.cse.ambience.dataStructures.Rows;
-import edu.buffalo.cse.ambience.dataStructures.Table;
-import edu.buffalo.cse.ambience.dataStructures.gyan;
 
-public class LibHBase implements DBOps, ambienceDBops
+public class LibHBase implements DBOps
 {
 	private Configuration conf=null;
+	private HBaseAdmin hAdmin=null;
 	private Configuration hdfsConf=null;
 	private static LibHBase instance=null;
 	private static final int DEFAULT_SCANNER_CACHING=500;
@@ -75,26 +61,75 @@ public class LibHBase implements DBOps, ambienceDBops
 	 */
 	private enum MRplatformParams
 	{
-		
+		/*mapreduce.map.sort.spill.percent
+		mapreduce.tasktracker.report.address
+		mapreduce.reduce.shuffle.retry-delay.max.ms
+		mapreduce.reduce.shuffle.connect.timeout
+		mapreduce.reduce.shuffle.read.timeout
+		mapreduce.reduce.shuffle.parallelcopies
+		mapreduce.task.timeout
+		mapreduce.map.cpu.vcores
+		mapreduce.reduce.cpu.vcores
+		mapreduce.reduce.shuffle.merge.percent
+		mapreduce.reduce.shuffle.input.buffer.percent
+		mapreduce.reduce.input.buffer.percent
+		mapreduce.shuffle.max.connections
+		mapreduce.job.speculative.slowtaskthreshold
+		mapreduce.output.fileoutputformat.compress.type
+		mapreduce.output.fileoutputformat.compress.codec
+		mapreduce.map.output.compress.codec*/
 	}
 	
-	private LibHBase(Configuration hdfsConf) 
+	private LibHBase(Configuration hdfsConf) throws MasterNotRunningException,ZooKeeperConnectionException,IOException
 	{
 		this.hdfsConf=hdfsConf;
-		conf = HBaseConfiguration.create(hdfsConf);//HBaseConfiguration.create(); -- FIXME -- lib jars
+		conf = HBaseConfiguration.create(hdfsConf);
+		hAdmin = new HBaseAdmin(conf);
 		// set all job properties
 		conf.setLong("mapreduce.task.timeout", DEFAULT_TIMEOUT);
 		conf.setBoolean("mapreduce.map.speculative",false); 
 		//conf.set("mapreduce.task.io.sort.factor",)
 	}
 	
+	public Configuration getConf()
+	{
+		return conf;
+	}
+	
+	
+
+	/**
+	 * 
+	 * @param params
+	 */
+	public void setMRParams(HashMap<MRParams, String> mrParams)
+	{
+		Set<MRParams> properties = mrParams.keySet();
+		for(MRParams property:properties)
+		{
+			if(mrParams.get(property)!=null)
+				conf.set(property.toString(),mrParams.get(property));
+		}
+	}
 	/**
 	 * @return
 	 */
 	public static LibHBase getInstance(Configuration hdfsConf) 
 	{
 		if(instance == null)
-			instance = new LibHBase(hdfsConf);
+		{
+			try
+			{
+				instance = new LibHBase(hdfsConf);
+				return instance;
+			}
+			catch(MasterNotRunningException mex)
+			{System.out.println("Master not running!");mex.printStackTrace();}
+			catch (ZooKeeperConnectionException zex) 
+			{System.out.println("Zookeeper connx expection!");zex.printStackTrace();}
+			catch (IOException ioex)
+			{System.out.println("General exception!");ioex.printStackTrace();}
+		}
 		return instance;
 	}
 	
@@ -109,17 +144,13 @@ public class LibHBase implements DBOps, ambienceDBops
 	
 	/**
 	 * 
-	 * @return
+	 * @param suffix
 	 */
-	public Configuration getConf()
-	{
-		return conf;
-	}
-
 	public void setTblSuffix(String suffix)
 	{
 		tblSuffix=suffix;
 	}
+	
 	/**
 	 * 
 	 * @param serverCnt
@@ -191,6 +222,7 @@ public class LibHBase implements DBOps, ambienceDBops
    		String[] splits= combination.split(delim);
    		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
    		String[] rslt=getID(splits);
+   		if(rslt==null) return null;
    		StringBuilder b =new StringBuilder();
    		b.setLength(0);
 		for(int i=0;i<rslt.length-1;i++)
@@ -253,12 +285,13 @@ public class LibHBase implements DBOps, ambienceDBops
    	 * @throws IOException
    	 * @throws NumberFormatException
    	 */
-   	private String getVar(String combination,String delim) throws IOException,NumberFormatException
+   	public String getVar(String combination,String delim) throws IOException,NumberFormatException
    	{
    		if(combination==null) return null;
    		String[] splits= combination.split(delim);
    		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
    		String[] rslt=getVar(splits);
+   		if(rslt==null) return null;
    		StringBuilder b =new StringBuilder();
    		b.setLength(0);
 		for(int i=0;i<rslt.length-1;i++)
@@ -275,7 +308,7 @@ public class LibHBase implements DBOps, ambienceDBops
    	 * @return
    	 * @throws IOException
    	 */
-   	public String[] getVar(String... ids) throws IOException
+   	private String[] getVar(String... ids) throws IOException
 	{
    		String revMap=AMBIENCE_tables.revMap.getName()+tblSuffix;
    		String[] revMapCF=AMBIENCE_tables.revMap.getColFams();
@@ -287,24 +320,14 @@ public class LibHBase implements DBOps, ambienceDBops
 		Get g;
 		for(int i=0;i<mapped.length;i++)
 		{
-			g = new Get(Bytes.toBytes(ids[i]));
+			g = new Get(Bytes.toBytes(ids[i])); // FIXME --- use getRecord for this
 			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
 			if(mapped[i]==null) return null; // if entity not present
 		}
 		return mapped;
 	}
    	
-   	
-   	/**
-   	 * 
-   	 */
-   	private void findCommon(int[][] candidates)
-   	{
-   		
-   	}
-   	
-   
-   	/**
+   /**
    	 * Non MR way of counting table row count
    	 * @param tableName
    	 */
@@ -364,35 +387,40 @@ public class LibHBase implements DBOps, ambienceDBops
 	 * @param tableFilter
 	 * @return
 	 */
-	public Scan getScanner(ArrayList<String> tableFilter)
+	public Scan getScanner(AMBIENCE_tables tbl)
 	{
 		Scan s = new Scan();
-		String src_cf[] = AMBIENCE_tables.source.getColFams();
+		String src_cf[] = tbl.getColFams();
 		s.addFamily(Bytes.toBytes(src_cf[0]));
 		s.setCaching(DEFAULT_SCANNER_CACHING); 
 		s.setCacheBlocks(false); // always set false for MR jobs
-		if(tableFilter!=null)
-		{
-			byte[] fam= Bytes.toBytes(src_cf[0]);
-			for(String col : tableFilter)
-			{
-				s.addColumn(fam, Bytes.toBytes(col));
-		    }
-		}
 		return s;
+	}
+	
+	/**
+	 * Trusting the caller to have the arrayList rightly populated 
+	 * i.e. with Objects of the right dataTypes
+	 * @param s
+	 * @param cols
+	 * @param operation
+	 */
+	public void setColsTo(Scan s, String[] cols,boolean operation) throws IOException
+	{
+		FilterList filterList = new FilterList();
+		Filter qualfilter;
+		CompareOp op= operation ? CompareOp.EQUAL:CompareOp.NOT_EQUAL;
+		String[] colIDs=getID(cols); // ids 
+		for(String colID:colIDs)
+		{	
+			qualfilter=new QualifierFilter(op,new BinaryComparator(Bytes.toBytes(colID)));
+			filterList.addFilter(qualfilter);
+		}
+		s.setFilter(filterList);
 	}
 	
 	public Scan getScanner(int cacheSize,Filter filter) // FIXME
 	{
 		return null;
-	}
-	
-	
-	public Scan getScanner(ArrayList<String> tableFilter, int cacheCnt)
-	{
-		Scan s=getScanner(tableFilter);
-		s.setCaching(cacheCnt);
-		return s;
 	}
 	
 	public void setRejectVal(Scan s,String value)
@@ -418,7 +446,7 @@ public class LibHBase implements DBOps, ambienceDBops
 	 * 
 	 * @return
 	 */
-	public Scan getScanner()
+	public Scan getSrcTblScan()
 	{
 		Scan s = new Scan();
 		String src_cf[] = AMBIENCE_tables.source.getColFams();
@@ -434,63 +462,32 @@ public class LibHBase implements DBOps, ambienceDBops
    	 */
    	public boolean tableExists(String tableName)
    	{
-   		HBaseAdmin admin=null;;
+   		boolean retVal=false;
    		try
    		{
-   			admin = new HBaseAdmin(conf);
-   			//admin.getConnection().
-   			boolean rslt = admin.tableExists(tableName);
-   			admin.close();
-   			return rslt;
-   		}
-   		catch(MasterNotRunningException mex)
-   		{
-   			System.out.println("Master not running exception!!");
-   			mex.printStackTrace();
-   		}
-   		catch(ZooKeeperConnectionException zex)
-   		{
-   			System.out.println("Zookeeper connection exception !!");
-   			zex.printStackTrace();
+   			retVal = hAdmin.tableExists(tableName);
    		}
    		catch (IOException e)
    		{
    			System.out.println("IO exception !!");
    			e.printStackTrace();
    		}
-   		finally
-   		{
-   			try
-   			{
-	   			if(admin!=null)
-	   				admin.close();
-   			}
-   			catch(IOException iex)
-   			{
-   				System.out.println("HAdmin is null!!!");
-   			}
-   		}
-   		return false;
+   		return retVal;
    	}
    	
-   	
-   	
-   /**
+   	/**
 	 * Create table in Hbase for storing data
 	 */
 	public boolean createTable(String tableName, String[] colfams) 
 	{
-		Boolean retVal= true;
+		boolean retVal=true;
 		HColumnDescriptor colDesc;
-		HBaseAdmin admin=null;
 		try
 		{
-			admin = new HBaseAdmin(conf);
-			// delete table if it already exists
-			if(admin.tableExists(tableName) == true)
+			if(tableExists(tableName))
 			{
-				admin.disableTable(tableName);
-				admin.deleteTable(tableName);
+				hAdmin.disableTable(tableName);
+				hAdmin.deleteTable(tableName);
 			}
 			HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(tableName));
 			for(int i =0;i<colfams.length;i++)
@@ -498,101 +495,52 @@ public class LibHBase implements DBOps, ambienceDBops
 				colDesc=new HColumnDescriptor(colfams[i]);
 				tableDescriptor.addFamily(colDesc);
 			}
-			admin.createTable(tableDescriptor);
-			admin.close();
-			tables.put(tableName,getTableHandler(tableName)); // avoid creating many table handler
+			hAdmin.createTable(tableDescriptor);
+			tables.put(tableName,getTableHandler(tableName));
 		}
-		catch(MasterNotRunningException mex)
-   		{
-   			System.out.println("Master not running exception!!");
-   			mex.printStackTrace();
-   		}
-   		catch(ZooKeeperConnectionException zex)
-   		{
-   			System.out.println("Zookeeper connection exception !!");
-   			zex.printStackTrace();
-   		}
-   		catch (IOException e)
+		catch (IOException e)
    		{
    			System.out.println("IO exception !!");
    			e.printStackTrace();
+   			retVal=false;
    		}
-   		finally
-   		{
-   			try
-   			{
-	   			if(admin!=null)
-	   				admin.close();
-   			}
-   			catch(IOException iex)
-   			{
-   				System.out.println("HAdmin is null!!!");
-   			}
-   		}
-		
-		return retVal;
+   		return retVal;
 	}
 
 	/**
 	 * OverLoaded method
-	 * 
 	 * @return
 	 */
 	public boolean createTable(String tableName, String[] colfams,int splitCnt) 
 	{
 		Boolean retVal= true;
 		HColumnDescriptor colDesc;
-		HBaseAdmin admin=null;
 		try
 		{
 			byte[][] splits=genSplits(splitCnt);
-			admin = new HBaseAdmin(conf);
-			if(admin.tableExists(tableName) == true)
+			if(tableExists(tableName))
 			{
-				admin.disableTable(tableName);
-				admin.deleteTable(tableName);
+				hAdmin.disableTable(tableName);
+				hAdmin.deleteTable(tableName);
 			}
 			HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(tableName));
 			
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
-				//System.out.println("Just trying out compression");
-				//colDesc.setCompressionType(Compression.Algorithm.LZO);
+				//colDesc.setCompressionType(Compression.Algorithm.LZO); -- FIXME -- make compression enabling configurable
 				tableDescriptor.addFamily(colDesc);
 			}
-			admin.createTable(tableDescriptor,splits);
-			admin.close();
+			hAdmin.createTable(tableDescriptor,splits);
 			tables.put(tableName,getTableHandler(tableName));
 		}
-		catch(MasterNotRunningException mex)
-   		{
-   			System.out.println("Master not running exception!!");
-   			mex.printStackTrace();
-   		}
-   		catch(ZooKeeperConnectionException zex)
-   		{
-   			System.out.println("Zookeeper connection exception !!");
-   			zex.printStackTrace();
-   		}
-   		catch (IOException e)
+		catch (IOException e)
    		{
    			System.out.println("IO exception !!");
    			e.printStackTrace();
+   			retVal=false;
    		}
-   		finally
-   		{
-   			try
-   			{
-	   			if(admin!=null)
-	   				admin.close();
-   			}
-   			catch(IOException iex)
-   			{
-   				System.out.println("HAdmin is null!!!");
-   			}
-   		}
-		return retVal;
+   		return retVal;
 	}
 
 	/**
@@ -602,10 +550,19 @@ public class LibHBase implements DBOps, ambienceDBops
 	 */
 	public HTable getTableHandler(String tblname) throws IOException
 	{
-		//HTable table = tables.get(tblname);
-		//if(table==null)
-		return new HTable(conf,tblname);
-		//return table;	
+		if(!tableExists(tblname)) // check if table exists also a variant of the name
+		{
+			tblname=tblname+tblSuffix;
+			if(!tableExists(tblname))
+				return null;
+		}
+		HTable table = tables.get(tblname); // FIXME -- requires testing
+		if(table==null)
+		{
+			tables.put(tblname,new HTable(conf,tblname));
+			return tables.get(tblname);
+		}
+		return table;	
 	}
 	
 	public boolean printJobStats(String jobID)
@@ -666,14 +623,6 @@ public class LibHBase implements DBOps, ambienceDBops
 		{
 			ioex.printStackTrace();
 			System.out.println("Cannot read data from :"+tablename);
-			try
-			{
-				if(table!=null) table.close();
-			}
-			catch(IOException ex)
-			{
-				System.out.println("some error in closing");
-			}
 			return false;
 		}
 		return true;
@@ -682,7 +631,6 @@ public class LibHBase implements DBOps, ambienceDBops
 	public boolean readTable(String tableName, String colfam) 
 	{
 		System.out.println("========================"+tableName+"=======================");
-		Table data = Table.getInstance();
 		HTable table = null;
 		try
 		{
@@ -704,7 +652,6 @@ public class LibHBase implements DBOps, ambienceDBops
 			    String key = Bytes.toString(result.getRow());
 			    NavigableMap<byte[], byte[]> list = entireRow.getFamilyMap(Bytes.toBytes(colfam));
 			    Set<byte[]> entry =  list.keySet();
-			    
 			    for(byte[] colKey : entry)
             	{
 			    		System.out.println("Key="+key+"--"+"value="+Bytes.toString(list.get(colKey)));
@@ -825,7 +772,6 @@ public class LibHBase implements DBOps, ambienceDBops
 	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,
 			ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException
 	{
-		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
 		HTable table=getTableHandler(tbl);
 		int colSize = colnames.size()-1;
 		byte[] indVars = Bytes.toBytes(colFams[0]);
@@ -841,15 +787,13 @@ public class LibHBase implements DBOps, ambienceDBops
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
 		}
-		hbAdmin.close();
-		table.close();
 		return true;
 	}
 	
 	private boolean loadPolyLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[],
 			int splitCnt,Iterator<String> keysIt) throws IOException
 	{
-		HBaseAdmin hbAdmin = new HBaseAdmin(conf);
+		
 		HTable table = getTableHandler(tbl);
 		int colSize = colnames.size()-1;
 		int rowCnt=rows.size();
@@ -889,8 +833,6 @@ public class LibHBase implements DBOps, ambienceDBops
 			}
 		}
 		System.out.println("for prefix ="+prefix+" rec cnt="+(suffix-1));
-		hbAdmin.close();
-		table.close();
 		return true;
 	}
 	
@@ -917,26 +859,23 @@ public class LibHBase implements DBOps, ambienceDBops
 	 * @param RowKey
 	 * @return
 	 */
-	public boolean getRecord(String tableName,String RowKey)
+	public Result getRecord(String tableName,String RowKey)
 	{
-		// check what form of encoding is done
-		Result rs = null;
+		Result rs;
 		try
 		{
 			HTable table = getTableHandler(tableName);
 	        Get get = new Get(RowKey.getBytes());
 	        rs = table.get(get);
 	        if(rs == null || rs.isEmpty())
-	        {
-	        	return false;
-	        }
+	        	return null;
 	    }
 		catch(IOException ioex)
 		{
 			ioex.printStackTrace();
-			return false;
+			return null;
 		}
-		return true;
+		return rs;
 	}
 	
 	/**
@@ -954,33 +893,14 @@ public class LibHBase implements DBOps, ambienceDBops
     		System.out.println(hr.getRegionId()+"\t"+regions.get(hr).getServerName());
     }
 	
-	@Override
-	public boolean add() 
-	{
-		return false;
-	}
-
-	@Override
-	public boolean delete() 
-	{
-		return false;
-	}
-
-	@Override
-	public boolean modify() 
-	{
-		return false;
-	}
-
-	@Override
-	public boolean scan() 
-	{
-		return false;
-	}
-
-	
-
-	private static double orderedRep(byte[] k,Order order) throws IOException
+	/**
+	 * 
+	 * @param k
+	 * @param order
+	 * @return
+	 * @throws IOException
+	 */
+	public static double orderedRep(byte[] k,Order order) throws IOException
 	{
 		ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 	    DoubleWritableRowKey d = new DoubleWritableRowKey();
@@ -988,88 +908,29 @@ public class LibHBase implements DBOps, ambienceDBops
 	    buffer.set(k, 0, k.length);
 	    return ((DoubleWritable)d.deserialize(buffer)).get();
 	}
-	
-	
-	
-	@Override
-	public ArrayList<gyan> topT(int T,Order order)
+		
+	/**
+	 * 
+	 * @return
+	 */
+	public boolean exit() 
 	{
-		ArrayList<gyan> top=new ArrayList<gyan>();
-		try
+		boolean retVal=true;
+		for(Map.Entry<String, HTable> entry : tables.entrySet())// closing all tables
 		{
-			HTable table = getTableHandler("top");
-			Scan scan = new Scan();
-			scan.setCaching(T); 
-			scan.setMaxVersions(Integer.MAX_VALUE);
-			ResultScanner scanner = table.getScanner(scan);
-			int LIMIT=0;
-			String key;
-			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
+			try
+			{entry.getValue().close();}
+			catch(IOException ioex)
 			{
-				double metric=orderedRep(result.getRow(),Order.DESCENDING);
-			    List<Cell> values =result.getColumnCells(Bytes.toBytes("DATA"),Bytes.toBytes("ID"));
-			    for(Cell c: values)
-			    {	
-			    	key=Bytes.toString(CellUtil.cloneValue(c));
-			    	top.add(new gyan(key,getVar(key,Constants.COMB_SPLIT),metric));
-			    	if(++LIMIT==T)return top;
-			    }
+				System.out.println("Some problem closing out "+entry.getKey());
+				retVal=false;
+				ioex.printStackTrace();
 			}
-			table.close();
 		}
-		catch(IOException ioex)
-		{
-			ioex.printStackTrace();
-			System.out.println("Problem accessing topT!!");
-		}
-		return top;
-	}
-	
-	@Override
-	public double computeKWII(ContingencyT cTbl) 
-	{
-		//ascertain order of the combination
-		return 0;
-	}
-	
-	@Override
-	public double computePAI(ContingencyT cTbl) 
-	{
-		//ascertain order of the combination
-		return 0;
-	}
-
-	@Override
-	public ContingencyT getCTable(gyan g) 
-	{
-		// ascertain order ---
+		try{hAdmin.close();}//closing hbase admin
+		catch(IOException ioex){ioex.printStackTrace();}
 		
-		// -- connect to contingency table and get contingency
-		
-		// -- fetch
-		
-		return null;
-	}
-
-	@Override
-	public ArrayList<Double> computeKWII(ArrayList<gyan> listg) 
-	{
-		//ascertain order of the combination
-		
-		return null;
-	}
-
-	@Override
-	public double computeEntropy(gyan g) 
-	{
-		// TODO Auto-generated method stub
-		return 0;
-	}
-	
-	public boolean exit()
-	{
-		// close all table handler before leaving
-		return true;
+	    return retVal;
 	}
 	
 	
@@ -1121,34 +982,63 @@ public class LibHBase implements DBOps, ambienceDBops
    	}
    	
    	
-   	public void tstMapping() throws IOException, NumberFormatException
-   	{
-   		ArrayList<String> tst=new ArrayList<String>();
-		tst.add("15|0|1");
-		tst.add("15|1|0");
-		tst.add("1|15|0");
-		tst.add("1|0|15");
-		tst.add("0|1|15");
-		tst.add("0|15|1");
-		ArrayList<String> str;
-		str=getVar(tst, "\\|");
-		for(String s: str)
-		{
-			System.out.println("we are getting "+s);
-		}
-		
-		tst.clear();
-		
-		tst.add("044892|044356|044376");
-		tst.add("044892|044376|044356");
-		tst.add("044376|044892|044356");
-		tst.add("044376|044356|044892");
-		tst.add("044356|044376|044892");
-		tst.add("044356|044892|044376");
-		str = getID(tst,"\\|");
-		for(String s: str)
-		{
-			System.out.println("we are getting "+s);
-		}
-   	}
+   
+
+	
+	
+	@Override
+	public boolean add() 
+	{
+		return false;
+	}
+
+	@Override
+	public boolean delete() 
+	{
+		return false;
+	}
+
+	@Override
+	public boolean modify() 
+	{
+		return false;
+	}
+
+	@Override
+	public boolean scan() 
+	{
+		return false;
+	}
 }
+/*
+
+public void tstMapping() throws IOException, NumberFormatException
+	{
+		ArrayList<String> tst=new ArrayList<String>();
+	tst.add("15|0|1");
+	tst.add("15|1|0");
+	tst.add("1|15|0");
+	tst.add("1|0|15");
+	tst.add("0|1|15");
+	tst.add("0|15|1");
+	ArrayList<String> str;
+	str=getVar(tst, "\\|");
+	for(String s: str)
+	{
+		System.out.println("we are getting "+s);
+	}
+	
+	tst.clear();
+	
+	tst.add("044892|044356|044376");
+	tst.add("044892|044376|044356");
+	tst.add("044376|044892|044356");
+	tst.add("044376|044356|044892");
+	tst.add("044356|044376|044892");
+	tst.add("044356|044892|044376");
+	str = getID(tst,"\\|");
+	for(String s: str)
+	{
+		System.out.println("we are getting "+s);
+	}
+	}*/
