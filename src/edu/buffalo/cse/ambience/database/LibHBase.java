@@ -36,6 +36,7 @@ import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.hbase.io.compress.Compression;
 
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.core.MRParams;
@@ -51,9 +52,10 @@ public class LibHBase implements DBOps
 	private boolean idem=false;
 	private static final String[] alphabets={"A","B","C","D","E","F","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"};
 	private static final int alphaLen=alphabets.length;
-	private static String tblSuffix="";
-	private HashMap<String,HTable> tables=new HashMap<String,HTable>(); // HTable creation is costly 
+	private static String tblSuffix=""; //Reason -- MR jobs using the same nodes; eating into each others data
+	private HashMap<String,HTable> tables=new HashMap<String,HTable>(); //HTable creation is costly 
 	private static final long DEFAULT_TIMEOUT=1800000*2; 
+	private static boolean shouldCompress=false;
 	
 	/**
 	 * From experience -- FIXME
@@ -85,19 +87,27 @@ public class LibHBase implements DBOps
 		this.hdfsConf=hdfsConf;
 		conf = HBaseConfiguration.create(hdfsConf);
 		hAdmin = new HBaseAdmin(conf);
-		// set all job properties
-		conf.setLong("mapreduce.task.timeout", DEFAULT_TIMEOUT);
-		conf.setBoolean("mapreduce.map.speculative",false); 
-		//conf.set("mapreduce.task.io.sort.factor",)
+		setFrameWorkParams();
 	}
+	
+	
 	
 	public Configuration getConf()
 	{
 		return conf;
 	}
 	
+	private void setFrameWorkParams()
+	{
+		conf.setLong("mapreduce.task.timeout", DEFAULT_TIMEOUT);
+		conf.setBoolean("mapreduce.map.speculative",false);
+	}
 	
-
+	public void setCompression(boolean b)
+	{
+		shouldCompress=b;
+	}
+	
 	/**
 	 * 
 	 * @param params
@@ -160,9 +170,7 @@ public class LibHBase implements DBOps
 	{
 		byte[][] regionSplits=new byte[splitCnt-1][];
 		for(int i=0;i<splitCnt-1;i++)
-		{
 			regionSplits[i] = Bytes.toBytes(getRegionBoundary(i+1));
-		}
 		return regionSplits;
 	}
 	
@@ -184,7 +192,7 @@ public class LibHBase implements DBOps
    	 * @return
    	 * @throws IOException
    	 */
-   	public NavigableMap<HRegionInfo,ServerName> getRegions(String tableName) throws IOException
+   	public NavigableMap<HRegionInfo,ServerName> getRegions(String tableName) throws IOException,TableNotFoundException
    	{
    		HTable handle = getTableHandler(tableName);
    		return handle.getRegionLocations();
@@ -196,7 +204,7 @@ public class LibHBase implements DBOps
    	 * @return
    	 * @throws IOException
    	 */
-	public ArrayList<String> getID(ArrayList<String> many,String delim) throws IOException,NumberFormatException
+	public ArrayList<String> getID(ArrayList<String> many,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
    		ArrayList<String> trans=new ArrayList<String>();
    		String rslt;
@@ -216,13 +224,12 @@ public class LibHBase implements DBOps
 	 * @throws IOException
 	 * @throws NumberFormatException
 	 */
-   	public String getID(String combination,String delim) throws IOException,NumberFormatException
+   	public String getID(String combination,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
    		if(combination==null) return null;
    		String[] splits= combination.split(delim);
    		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
    		String[] rslt=getID(splits);
-   		if(rslt==null) return null;
    		StringBuilder b =new StringBuilder();
    		b.setLength(0);
 		for(int i=0;i<rslt.length-1;i++)
@@ -230,7 +237,7 @@ public class LibHBase implements DBOps
 			b.append(rslt[i]);b.append(Constants.COMB_SEP);
 		}
 		b.append(rslt[rslt.length-1]);
-   		return b.toString();
+		return b.toString();
    	}
    	
    	/**
@@ -239,23 +246,32 @@ public class LibHBase implements DBOps
    	 * @return
    	 * @throws IOException
    	 */
-   	private String[] getID(String... var) throws IOException
+   	private String[] getID(String... var) throws IOException,NumberFormatException,ElementNotFoundException
 	{
    		String fwdMap=AMBIENCE_tables.fwdMap.getName()+tblSuffix;
    		String[] fwdMapCF=AMBIENCE_tables.fwdMap.getColFams();
    		byte[] colfam=Bytes.toBytes(fwdMapCF[0]);
    		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
-   		HTable tbl = getTableHandler(fwdMap) ;
-		String[] mapped=new String[var.length];
-		Get g;
-		for(int i=0;i<var.length;i++)
-		{
-			g = new Get(Bytes.toBytes(var[i]));
-			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
-			if(mapped[i]==null) return null; // if entity not present
-		}
-		sort(mapped);
-		return mapped;
+   		try
+   		{
+	   		HTable tbl=getTableHandler(fwdMap) ;
+			String[] mapped=new String[var.length];
+			Get g;
+			for(int i=0;i<var.length;i++)
+			{
+				g = new Get(Bytes.toBytes(var[i]));
+				mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+				if(mapped[i]==null) throw new ElementNotFoundException(); // if entity not present
+			}
+			sort(mapped);
+			return mapped;
+   		}
+   		catch(TableNotFoundException tnfex)
+   		{
+   			System.out.println("Mapping tables not found!");
+   			tnfex.printStackTrace();
+   			throw new ElementNotFoundException();
+   		}
 	}
    	
    	
@@ -265,15 +281,11 @@ public class LibHBase implements DBOps
    	 * @return
    	 * @throws IOException
    	 */
-   	public ArrayList<String> getVar(ArrayList<String> many,String delim) throws IOException,NumberFormatException
+   	public ArrayList<String> getVar(ArrayList<String> many,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
    		ArrayList<String> trans=new ArrayList<String>();
-   		String rslt;
    		for(String t : many)
-   		{
-   			if((rslt=getVar(t,delim))!=null)
-   				trans.add(rslt);
-   		}
+   			trans.add(getVar(t,delim));
    		return trans;
    	}
    	
@@ -285,13 +297,13 @@ public class LibHBase implements DBOps
    	 * @throws IOException
    	 * @throws NumberFormatException
    	 */
-   	public String getVar(String combination,String delim) throws IOException,NumberFormatException
+   	public String getVar(String combination,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
    		if(combination==null) return null;
    		String[] splits= combination.split(delim);
    		if(splits.length==1){System.out.println("INVALID DELIMITER FOR "+combination);}
    		String[] rslt=getVar(splits);
-   		if(rslt==null) return null;
+   		
    		StringBuilder b =new StringBuilder();
    		b.setLength(0);
 		for(int i=0;i<rslt.length-1;i++)
@@ -308,30 +320,39 @@ public class LibHBase implements DBOps
    	 * @return
    	 * @throws IOException
    	 */
-   	private String[] getVar(String... ids) throws IOException
+   	private String[] getVar(String... ids) throws IOException,NumberFormatException,ElementNotFoundException
 	{
    		String revMap=AMBIENCE_tables.revMap.getName()+tblSuffix;
    		String[] revMapCF=AMBIENCE_tables.revMap.getColFams();
    		byte[] colfam=Bytes.toBytes(revMapCF[0]);
    		byte[] qual=Bytes.toBytes(Constants.mapTblQual);
-   		HTable tbl= getTableHandler(revMap) ;
-   		sort(ids);
-		String[] mapped=new String[ids.length];
-		Get g;
-		for(int i=0;i<mapped.length;i++)
-		{
-			g = new Get(Bytes.toBytes(ids[i])); // FIXME --- use getRecord for this
-			mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
-			if(mapped[i]==null) return null; // if entity not present
-		}
-		return mapped;
+   		try
+   		{
+	   		HTable tbl= getTableHandler(revMap) ;
+	   		sort(ids);
+			String[] mapped=new String[ids.length];
+			Get g;
+			for(int i=0;i<mapped.length;i++)
+			{
+				g = new Get(Bytes.toBytes(ids[i])); // FIXME --- use getRecord for this
+				mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
+				if(mapped[i]==null) throw new ElementNotFoundException(); // if entity not present
+			}
+			return mapped;	
+   		}
+   		catch(TableNotFoundException tnfex)
+   		{
+   			System.out.println("Mapping table not found!");
+   			tnfex.printStackTrace();
+   			throw new ElementNotFoundException();
+   		}
 	}
    	
    /**
    	 * Non MR way of counting table row count
    	 * @param tableName
    	 */
-   	public long getRowCnt(String tableName,String colfam)
+   	public long getRowCnt(String tableName,String colfam) throws TableNotFoundException
    	{
    		HTable table = null;
 		long rowCnt=0;
@@ -404,18 +425,19 @@ public class LibHBase implements DBOps
 	 * @param cols
 	 * @param operation
 	 */
-	public void setColsTo(Scan s, String[] cols,boolean operation) throws IOException
+	public void setColsTo(Scan s, String[] cols,boolean operation) throws IOException,ElementNotFoundException
 	{
 		FilterList filterList = new FilterList();
 		Filter qualfilter;
 		CompareOp op= operation ? CompareOp.EQUAL:CompareOp.NOT_EQUAL;
-		String[] colIDs=getID(cols); // ids 
+		String[] colIDs=getID(cols);
 		for(String colID:colIDs)
 		{	
 			qualfilter=new QualifierFilter(op,new BinaryComparator(Bytes.toBytes(colID)));
 			filterList.addFilter(qualfilter);
 		}
 		s.setFilter(filterList);
+		
 	}
 	
 	public Scan getScanner(int cacheSize,Filter filter) // FIXME
@@ -464,14 +486,9 @@ public class LibHBase implements DBOps
    	{
    		boolean retVal=false;
    		try
-   		{
-   			retVal = hAdmin.tableExists(tableName);
-   		}
+   		{retVal = hAdmin.tableExists(tableName);}
    		catch (IOException e)
-   		{
-   			System.out.println("IO exception !!");
-   			e.printStackTrace();
-   		}
+   		{e.printStackTrace();}
    		return retVal;
    	}
    	
@@ -493,10 +510,15 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
+				if(shouldCompress)colDesc.setCompressionType(Compression.Algorithm.LZO);
 				tableDescriptor.addFamily(colDesc);
 			}
 			hAdmin.createTable(tableDescriptor);
-			tables.put(tableName,getTableHandler(tableName));
+			try
+			{tables.put(tableName,getTableHandler(tableName));}
+			catch(TableNotFoundException tnex)
+			{tables.put(tableName,new HTable(conf, tableName));}
+			
 		}
 		catch (IOException e)
    		{
@@ -528,11 +550,17 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
-				//colDesc.setCompressionType(Compression.Algorithm.LZO); -- FIXME -- make compression enabling configurable
+				if(shouldCompress)colDesc.setCompressionType(Compression.Algorithm.LZO); 
 				tableDescriptor.addFamily(colDesc);
 			}
 			hAdmin.createTable(tableDescriptor,splits);
-			tables.put(tableName,getTableHandler(tableName));
+			try
+			{tables.put(tableName,getTableHandler(tableName));}
+			catch(TableNotFoundException tnex)
+			{
+				tnex.printStackTrace();
+				return false;
+			}
 		}
 		catch (IOException e)
    		{
@@ -548,19 +576,26 @@ public class LibHBase implements DBOps
 	 * @param tableName
 	 * @return
 	 */
-	public HTable getTableHandler(String tblname) throws IOException
+	public HTable getTableHandler(String tblname) throws TableNotFoundException
 	{
 		if(!tableExists(tblname)) // check if table exists also a variant of the name
 		{
 			tblname=tblname+tblSuffix;
 			if(!tableExists(tblname))
-				return null;
+				throw new TableNotFoundException();
 		}
-		HTable table = tables.get(tblname); // FIXME -- requires testing
-		if(table==null)
+		HTable table = tables.get(tblname);
+		try
 		{
-			tables.put(tblname,new HTable(conf,tblname));
-			return tables.get(tblname);
+			if(table==null)
+			{
+				tables.put(tblname,new HTable(conf,tblname));
+				return tables.get(tblname);
+			}
+		}
+		catch(IOException e) 
+		{
+			e.printStackTrace();
 		}
 		return table;	
 	}
@@ -625,10 +660,15 @@ public class LibHBase implements DBOps
 			System.out.println("Cannot read data from :"+tablename);
 			return false;
 		}
+		catch(TableNotFoundException tnex)
+		{
+			tnex.printStackTrace();
+			System.out.println("The requested table was not found!!");
+		}
 		return true;
 	}
 	
-	public boolean readTable(String tableName, String colfam) 
+	public boolean readTable(String tableName, String colfam) throws TableNotFoundException
 	{
 		System.out.println("========================"+tableName+"=======================");
 		HTable table = null;
@@ -697,8 +737,16 @@ public class LibHBase implements DBOps
 		HTable fmap=null,rmap=null;
 		try
 		{
-			fmap=getTableHandler(tblFdwMap);
-			rmap=getTableHandler(tblRevMap);
+			try
+			{
+				fmap=getTableHandler(tblFdwMap);
+				rmap=getTableHandler(tblRevMap);
+			}
+			catch(TableNotFoundException tnex) // should not happen -- but who knows
+			{
+				fmap=new HTable(conf,tblFdwMap);
+				rmap=new HTable(conf,tblRevMap);
+			}
 			Put fput=null,rput=null;
 			String id,col;
 			for(int i=0;i<colnames.size()-1;i++) // must not add trait as well !!
@@ -722,19 +770,6 @@ public class LibHBase implements DBOps
 			System.out.println("MAPPING TABLES FAILURE!");
 			return false;
 		}
-		finally
-		{
-			try
-			{
-				if(fmap!=null)fmap.close();
-				if(rmap!=null)rmap.close();
-			}
-			catch(IOException ioex)
-			{
-				ioex.printStackTrace();
-				System.out.println("PROBLEMS CLOSING MAPPING TABLES!");
-			}
-		}
 		return true;
 	}
 	
@@ -742,7 +777,7 @@ public class LibHBase implements DBOps
 	 * Load data into HBase table as specified in the arguments
 	 */
 	public boolean loadData(String tbl,ArrayList<String> colnames,
-			ArrayList<ArrayList<String>> rows,String colFams[]) 
+			ArrayList<ArrayList<String>> rows,String colFams[]) throws TableNotFoundException
 	{
 		try
 		{
@@ -770,7 +805,7 @@ public class LibHBase implements DBOps
 	}
 	
 	private boolean loadMonoLith(String tbl,ArrayList<String> colnames,
-			ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException
+			ArrayList<ArrayList<String>> rows,String[] colFams) throws IOException, TableNotFoundException
 	{
 		HTable table=getTableHandler(tbl);
 		int colSize = colnames.size()-1;
@@ -791,7 +826,7 @@ public class LibHBase implements DBOps
 	}
 	
 	private boolean loadPolyLith(String tbl,ArrayList<String> colnames,ArrayList<ArrayList<String>> rows,String colFams[],
-			int splitCnt,Iterator<String> keysIt) throws IOException
+			int splitCnt,Iterator<String> keysIt) throws IOException,TableNotFoundException
 	{
 		
 		HTable table = getTableHandler(tbl);
@@ -859,7 +894,7 @@ public class LibHBase implements DBOps
 	 * @param RowKey
 	 * @return
 	 */
-	public Result getRecord(String tableName,String RowKey)
+	public Result getRecord(String tableName,String RowKey) throws TableNotFoundException
 	{
 		Result rs;
 		try
@@ -882,7 +917,7 @@ public class LibHBase implements DBOps
 	 * 
 	 * @param map
 	 */
-	public void displayRegionInfo(String tbl) throws IOException
+	public void displayRegionInfo(String tbl) throws IOException,TableNotFoundException
 	{
 		NavigableMap<HRegionInfo,ServerName> regions=getRegions(tbl);
 		Set<HRegionInfo> n = regions.keySet();
@@ -900,7 +935,7 @@ public class LibHBase implements DBOps
 	 * @return
 	 * @throws IOException
 	 */
-	public static double orderedRep(byte[] k,Order order) throws IOException
+	public double orderedRep(byte[] k,Order order) throws IOException
 	{
 		ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 	    DoubleWritableRowKey d = new DoubleWritableRowKey();
@@ -927,8 +962,8 @@ public class LibHBase implements DBOps
 				ioex.printStackTrace();
 			}
 		}
-		try{hAdmin.close();}//closing hbase admin
-		catch(IOException ioex){ioex.printStackTrace();}
+		try{hAdmin.close();}
+		catch(IOException ioex){ioex.printStackTrace();retVal=false;}
 		
 	    return retVal;
 	}
@@ -939,7 +974,7 @@ public class LibHBase implements DBOps
    	 * @param mapped
    	 * @return
    	 */
-   	private void sort(String[] ele)
+   	private void sort(String[] ele) throws NumberFormatException
    	{
    		int length=ele.length;
    		int[] sorted=new int[ele.length];
@@ -981,11 +1016,6 @@ public class LibHBase implements DBOps
             	sort(array,i, higherIndex);
    	}
    	
-   	
-   
-
-	
-	
 	@Override
 	public boolean add() 
 	{
@@ -1010,6 +1040,9 @@ public class LibHBase implements DBOps
 		return false;
 	}
 }
+
+
+
 /*
 
 public void tstMapping() throws IOException, NumberFormatException

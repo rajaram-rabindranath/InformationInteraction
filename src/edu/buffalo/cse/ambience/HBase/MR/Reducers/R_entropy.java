@@ -36,7 +36,6 @@ public class R_entropy extends TableReducer<Text,Text, ImmutableBytesWritable>
 		int total=0;
 		int cnt=0;
 		double entropy=0.0f;
-		
 		/************************************
 		 * val eg. -->A|B|C 1_2_1,1
 		 ************************************/

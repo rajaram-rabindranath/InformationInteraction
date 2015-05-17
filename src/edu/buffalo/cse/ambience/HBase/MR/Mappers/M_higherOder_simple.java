@@ -205,13 +205,4 @@ public class M_higherOder_simple extends TableMapper<Text,Text>
 			c.strV=val.toString();
 		}
 	}
-	
-	public void intersection()
-	{
-		
-	}
-	public void union()
-	{
-		
-	}
 }

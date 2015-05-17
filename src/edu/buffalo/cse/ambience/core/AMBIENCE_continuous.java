@@ -18,8 +18,8 @@ public class AMBIENCE_continuous extends AMBIENCE
 	
 
 	@Override
-	public boolean start() {
-
+	public boolean start() 
+	{
 		return false;
 	}
 
@@ -79,6 +79,17 @@ public class AMBIENCE_continuous extends AMBIENCE
 
 	@Override
 	public boolean skipC(Job job, String sinkT) throws IOException,
+			InterruptedException, ClassNotFoundException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+
+
+	
+
+	@Override
+	public boolean contigency(Job job, String sinkT) throws IOException,
 			InterruptedException, ClassNotFoundException {
 		// TODO Auto-generated method stub
 		return false;

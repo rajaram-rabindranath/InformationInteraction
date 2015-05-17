@@ -7,5 +7,4 @@ public interface DBOps
 	public boolean delete();
 	public boolean modify();
 	public boolean scan();
-	//public void tableDump(String tbl,String dumpName,String colfam,String qual);
 }

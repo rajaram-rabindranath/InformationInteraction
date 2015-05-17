@@ -25,6 +25,7 @@ enum UserArgs
 	TOP_T_FLAG("t"),
 	JOBID_FLAG("j"),
 	METRIC_ORDER_FLAG("z"),
+	MAX_ITER_FLAG("y"),
 	FLUSH_INTERVAL("a");
 	
 	private String flag;

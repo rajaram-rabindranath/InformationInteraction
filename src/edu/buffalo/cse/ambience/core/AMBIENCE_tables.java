@@ -32,13 +32,19 @@ public enum AMBIENCE_tables
 		return cf;
 	}
 	
+	
+	/**
+	 * FIXME a very bad functions --- needs to be removed
+	 * @param ops
+	 * @return
+	 */
 	public static String getColFam(AMBIENCE_ops ops)
 	{
 		
 		switch(ops)
 		{
 			case CONT:
-				return AMBIENCE_tables.mutualInfo.cf[1];
+				return AMBIENCE_tables.contingency.cf[0];
 			case ENT:
 				return AMBIENCE_tables.mutualInfo.cf[0];
 			case ALL:

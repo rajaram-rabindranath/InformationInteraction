@@ -85,11 +85,8 @@ public class R_kwii extends TableReducer<Text, Text, ImmutableBytesWritable>
         * 3. Kick start counting by firing up a loop
         **************************************************************/
         for(int[] comb :AMBIENCE.kwiiSubsets(k))
-        {
-        	//subsets.put(comb,new HashMap<String,Integer>());
         	subsets.put(comb, new HashBag());
-        }
-		Set<int[]> subsetKeys= subsets.keySet();
+        Set<int[]> subsetKeys= subsets.keySet();
 		String[] valSplits;
 		String[] split;
 		int total=0;

@@ -13,6 +13,8 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 
+import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MaximizeAction;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -34,7 +36,10 @@ import edu.buffalo.cse.ambience.dataStructures.Constants;
 import edu.buffalo.cse.ambience.dataStructures.Rows;
 import edu.buffalo.cse.ambience.dataStructures.Table;
 import edu.buffalo.cse.ambience.dataStructures.VarClass;
+import edu.buffalo.cse.ambience.dataStructures.gyan;
+import edu.buffalo.cse.ambience.database.ElementNotFoundException;
 import edu.buffalo.cse.ambience.database.LibHBase;
+import edu.buffalo.cse.ambience.database.TableNotFoundException;
 
 public abstract class AMBIENCE 
 {
@@ -46,10 +51,10 @@ public abstract class AMBIENCE
 	CLI cli=null;
 	private Configuration hdfsConf;
 	LibHBase HBase=null;
-	
 	public abstract boolean kwii(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean pai(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean entropy(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
+	public abstract boolean contigency(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean all(Job job) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean kwiiList(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean skip(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
@@ -90,6 +95,33 @@ public abstract class AMBIENCE
 	
 	public boolean bootup()
 	{
+		HBase = LibHBase.getInstance(hdfsConf);
+		HBase.setTblSuffix("4"); // for the sake of CCR loads
+		AMBIENCE_metrics met= new AMBIENCE_metrics(HBase);
+		String vars="099263|099434|099483";
+		String delim="\\|";
+		
+		try
+		{
+			double PAI=met.getPAI(vars, delim);
+			double Kwii=met.getKWII(vars, delim);
+			double ent=met.getEntropy(vars,delim);
+			System.out.println("PAI "+PAI);
+			System.out.println("Kwii"+ Kwii);
+			System.out.println("Ent "+ent);
+		}
+		catch(IOException ex)
+		{
+			System.out.println("There has been an IO exception!!!!");
+		}
+		catch(ElementNotFoundException nex)
+		{
+			System.out.println("Element was not found!");
+		}
+		
+		
+		if(true) return false;
+		
 		if(oper.equals(AMBIENCE_ops.NONE))
 			return false;
 		if(!readInput(fname,mode,Constants.DELIM_TAB)) return false;
@@ -121,8 +153,7 @@ public abstract class AMBIENCE
 		AMBIENCE_tables srcT=AMBIENCE_tables.source;
 		AMBIENCE_tables jobStats=AMBIENCE_tables.jobStats;
 		if(!dbSetup(cli.getJobID(),sinkT, srcT, jobStats))return false;
-		
-		setMRParams(HBase.getConf());
+		HBase.setMRParams(mrParams);
 		return true;
 	}
 	
@@ -136,19 +167,21 @@ public abstract class AMBIENCE
 		String[] srcColFams=src.getColFams();
 		String topTTblname=AMBIENCE_tables.top.getName()+tblSuffix; 
 		
-		
 		HBase = LibHBase.getInstance(hdfsConf);
-		s=HBase.getScanner(varList);
-		HBase.setTblSuffix(tblSuffix);
+		HBase.setTblSuffix(tblSuffix); // for the sake of CCR loads
+		s=HBase.getScanner(AMBIENCE_tables.source);
 		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
 			HBase.setRejectVal(s,mrParams.get(MRParams.INVALID_VALUE));
-		
 		if(!HBase.setupMapping(data.getColumns().c,tblSuffix)) return false;
 		System.out.println("Mapping tables created!");
 		if(!HBase.createTable(srcTblname,srcColFams,splitCnt))return false;
 		System.out.println("SRC TABLE CREATED");
-		if(!HBase.loadData(srcTblname,data.getColumns().c,data.getRows().r,srcColFams))return false;
-		System.out.println("DATA LOADED");
+		try
+		{
+			if(!HBase.loadData(srcTblname,data.getColumns().c,data.getRows().r,srcColFams))return false;
+			System.out.println("DATA LOADED");
+		}
+		catch(TableNotFoundException tnfex){System.out.println("Source table does not exist!");tnfex.printStackTrace();}
 		if(!HBase.createTable(jobStatsTblname,jobStats.getColFams()))return false;
 		System.out.println("JOBSTATS TABLE CREATED");
 		if(!HBase.createTable(topTTblname,AMBIENCE_tables.top.getColFams()))return false;
@@ -163,12 +196,15 @@ public abstract class AMBIENCE
 	{
 		String srctname=AMBIENCE_tables.source.getName()+cli.getJobID();
 		String colFam=AMBIENCE_tables.source.getColFams()[0];
-		try{
-			HBase.displayRegionInfo(srctname);}
+		try{HBase.displayRegionInfo(srctname);}
+		catch(TableNotFoundException e){System.out.println("table not found!"); e.printStackTrace();} 
 		catch(IOException iex){System.out.println("problem in displayin region info!!"); iex.printStackTrace();}
+		
 		System.out.println("----------------- SOME DEBUG DATA ---------------");
 		System.out.println("Number of columns for the MR jobs is "+data.getMRColsCnt());
-		System.out.println("Total number of rows in Source are "+HBase.getRowCnt(srctname,colFam));
+		try
+		{System.out.println("Total number of rows in Source are "+HBase.getRowCnt(srctname,colFam));}
+		catch(TableNotFoundException e){System.out.println("Source table not found!");e.printStackTrace();}
 		System.out.println("----------------- SOME DEBUG DATA ---------------");
 		System.out.println("\n\n\n");
 	}
@@ -180,13 +216,15 @@ public abstract class AMBIENCE
 	 */
 	public boolean executeJob()
 	{
+		
+		
 		Configuration conf=HBase.getConf();
 		String[] src_cf =AMBIENCE_tables.source.getColFams();
 		try
 		{
-			//Job job = new Job(conf,oper.toString());
-			conf.setBoolean("mapreduce.compress.map.output",true);
-			conf.setClass("mapreduce.map.output.compress.codec",SnappyCodec.class, CompressionCodec.class);
+			Job job = new Job(conf,oper.toString());
+			/*conf.setBoolean("mapreduce.compress.map.output",true);
+			conf.setClass("mapreduce.map.output.compress.codec",SnappyCodec.class, CompressionCodec.class);*/
 			
 			// set io percent thingy
 			/*mapreduce.task.io.sort.mb
@@ -194,7 +232,7 @@ public abstract class AMBIENCE
 			mapreduce.reduce.shuffle.merge.percent
 			mapreduce.reduce.shuffle.input.buffer.percent*/
 
-			Job job = Job.getInstance(conf,oper.toString());
+			//Job job = Job.getInstance(conf,oper.toString());
 			job.setNumReduceTasks(Integer.valueOf(mrParams.get(MRParams.REDUCER_CNT))); // FIXME -- need to make this configurable
 			String sinkT=AMBIENCE_tables.getSinkT(oper).getName();
 			final long startMilli = System.currentTimeMillis();
@@ -228,6 +266,9 @@ public abstract class AMBIENCE
 					iter(job, sinkT);
 					break;
 				case CONT:
+					s.addFamily(Bytes.toBytes(src_cf[1])); // add the targetVar family
+					contigency(job, sinkT);
+					break;
 				case ENT:
 					entropy(job,sinkT);
 					break;
@@ -258,15 +299,15 @@ public abstract class AMBIENCE
 			
 			if(job.isSuccessful())
 			{
-				/** get the job diagnostics **/
-				getDiagnostics(job);
-				
+				//getDiagnostics(job);
 				String sinkTblName=AMBIENCE_tables.getSinkT(oper).getName()+cli.getJobID();
-				//HBase.topT("topT4",Integer.valueOf(cli.getTcount()),Integer.valueOf(cli.getKway()));
-				HBase.printJobStats(cli.getJobID());//(jobStatsTblName,AMBIENCE_tables.jobStats.getColFams()[1],1);
+				HBase.printJobStats(cli.getJobID());
 				HBase.readTable(sinkTblName,AMBIENCE_tables.getColFam(oper));
 				System.out.println("# regions in sink "+HBase.getRegions(sinkTblName).size());
 			}
+			// testing all metrics operations
+			
+			HBase.exit(); // exit HBase gracefully closing all HTable references
 		}
 		catch(InterruptedException iex)
 		{
@@ -282,6 +323,11 @@ public abstract class AMBIENCE
 		{
 			iex.printStackTrace();
 			System.out.println("General IO exception");
+		}
+		catch(TableNotFoundException e) 
+		{
+			System.out.println("Table not found!");
+			e.printStackTrace();
 		}
         return true;
 	}
@@ -346,14 +392,14 @@ public abstract class AMBIENCE
 		try
 		{
 			String line;
-			if(mode == null || mode.equals("dist"))
+			if(mode == null || mode.equals("dist")) // FIXME
 			{
 				/* for CCR - load */
 				String path= File.separator+"projects"+File.separator+"vipin"+File.separator+"rajaramr"+File.separator+"ambience"+File.separator+"input"+File.separator;
 				File in = new File(path+fileName);
 				br = new BufferedReader(new FileReader(in));
 			}
-			else if(mode.equals("local"))
+			else if(mode.equals("local")) // FIXME
 			{
 				/* local load */
 				Path pt=new Path("hdfs://localhost:54310/input/"+fileName);
@@ -398,19 +444,6 @@ public abstract class AMBIENCE
 	
 	
 	
-	/**
-	 * 
-	 * @param params
-	 */
-	public void setMRParams(Configuration conf)
-	{
-		Set<MRParams> properties = mrParams.keySet();
-		for(MRParams property:properties)
-		{
-			if(mrParams.get(property)!=null)
-				conf.set(property.toString(),mrParams.get(property));
-		}
-	}
 	
 	/****************************************************************
 	 * PRINTS OUT JOB DIAGNOSTICS INFORMATION -- TIME TAKEN 
@@ -478,6 +511,46 @@ public abstract class AMBIENCE
 		}
 		return true;
 	 
+	}
+	
+	/**
+   	 * 
+   	 */
+   	private ArrayList<Integer> findCommon(ArrayList<ArrayList<Integer>> candidates)
+   	{
+   		ArrayList<Integer> first,second,rslt;
+   		first=candidates.remove(0);second=candidates.remove(0);
+   		rslt=intersect(first,second);if(rslt.size()==0) return null; // nothing in common
+   		for(ArrayList<Integer> n: candidates)
+   		{
+   			rslt=intersect(rslt,n);
+   			if(rslt.size()==0) return null; // there is nothing in common
+   		}
+   		return rslt;
+   	}
+   	
+   	private ArrayList<Integer> intersect(ArrayList<Integer> a,ArrayList<Integer> b)
+	{
+		int indexA=0,indexB=0;
+		int sizeA=a.size(),sizeB=b.size();
+		ArrayList<Integer> common=new ArrayList<Integer>();
+		Integer A,B;
+		while(indexA<sizeA && indexB<sizeB)
+		{
+			A=a.get(indexA);B=b.get(indexB);
+			if(A==B)
+			{
+				common.add(A);
+				indexA++;indexB++;
+			}
+			else if(A<B)
+				indexA++;
+			else
+			{
+				indexB++;
+			}
+		}
+		return common;
 	}
 	
 	/**
