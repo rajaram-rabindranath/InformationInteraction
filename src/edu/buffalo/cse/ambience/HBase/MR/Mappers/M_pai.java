@@ -69,6 +69,7 @@ public class M_pai extends TableMapper<Text,Text>
 		int position=0;
 		for(byte[] key:keys) // transform KV pairs
 		{
+			System.out.println("key-"+Bytes.toString(key)+"--"+position);
 			rowMap.put(position,new String(origMap.get(key)));
 			position++;
 		}
