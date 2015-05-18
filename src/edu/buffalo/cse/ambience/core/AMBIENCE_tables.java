@@ -4,7 +4,7 @@ package edu.buffalo.cse.ambience.core;
 
 public enum AMBIENCE_tables 
 {
-	mutualInfo("mutual_information",new String [] {"infoMet","contingency"}),
+	mutualInfo("mutual_information",new String [] {"infoMet"}),
 	contingency("contingency",new String[]{"k_way"}),
 	source("table",new String[]{"indVars","targetVar"}), // should this be discrete vs continuous
 	stats("stats",new String[]{"A","B"}),
@@ -34,7 +34,7 @@ public enum AMBIENCE_tables
 	
 	
 	/**
-	 * FIXME a very bad functions --- needs to be removed
+	 * FIXME a very bad function --- needs to be removed
 	 * @param ops
 	 * @return
 	 */
