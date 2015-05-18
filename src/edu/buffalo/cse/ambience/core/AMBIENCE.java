@@ -93,12 +93,18 @@ public abstract class AMBIENCE
 			strVarList=cli.getVarList();
 	}
 	
-	public boolean bootup()
+	void chk()
 	{
 		HBase = LibHBase.getInstance(hdfsConf);
 		HBase.setTblSuffix("4"); // for the sake of CCR loads
+		try
+		{
+			HBase.tstMapping();
+		}
+		catch(IOException ioex){System.out.println("IO EX");}
+		if(true) return;
 		AMBIENCE_metrics met= new AMBIENCE_metrics(HBase);
-		String vars="099263|099434|099483";
+		String vars="098196|098227|098238";
 		String delim="\\|";
 		
 		try
@@ -106,9 +112,11 @@ public abstract class AMBIENCE
 			double PAI=met.getPAI(vars, delim);
 			double Kwii=met.getKWII(vars, delim);
 			double ent=met.getEntropy(vars,delim);
+			
 			System.out.println("PAI "+PAI);
 			System.out.println("Kwii"+ Kwii);
 			System.out.println("Ent "+ent);
+			//met.getCTable(vars, delim).printCTable();;
 		}
 		catch(IOException ex)
 		{
@@ -118,10 +126,12 @@ public abstract class AMBIENCE
 		{
 			System.out.println("Element was not found!");
 		}
-		
-		
+	}
+	
+	public boolean bootup()
+	{
+		chk();
 		if(true) return false;
-		
 		if(oper.equals(AMBIENCE_ops.NONE))
 			return false;
 		if(!readInput(fname,mode,Constants.DELIM_TAB)) return false;
@@ -181,7 +191,12 @@ public abstract class AMBIENCE
 			if(!HBase.loadData(srcTblname,data.getColumns().c,data.getRows().r,srcColFams))return false;
 			System.out.println("DATA LOADED");
 		}
-		catch(TableNotFoundException tnfex){System.out.println("Source table does not exist!");tnfex.printStackTrace();}
+		catch(TableNotFoundException tnfex)
+		{
+			System.out.println("Source table does not exist!");
+			tnfex.printStackTrace();
+			return false;
+		}
 		if(!HBase.createTable(jobStatsTblname,jobStats.getColFams()))return false;
 		System.out.println("JOBSTATS TABLE CREATED");
 		if(!HBase.createTable(topTTblname,AMBIENCE_tables.top.getColFams()))return false;
@@ -513,9 +528,7 @@ public abstract class AMBIENCE
 	 
 	}
 	
-	/**
-   	 * 
-   	 */
+	
    	private ArrayList<Integer> findCommon(ArrayList<ArrayList<Integer>> candidates)
    	{
    		ArrayList<Integer> first,second,rslt;
@@ -567,7 +580,11 @@ public abstract class AMBIENCE
 		return rowMap_trans;
 	}
 	
-	
+	/**
+	 * 
+	 * @param rowMap
+	 * @return
+	 */
 	public static HashMap<Integer,String> basicTransform(NavigableMap<byte[],byte[]> rowMap)
 	{
 		HashMap<Integer,String> rowMap_trans = new HashMap<Integer,String>();
