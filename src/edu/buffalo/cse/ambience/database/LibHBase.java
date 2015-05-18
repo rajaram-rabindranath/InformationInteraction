@@ -892,13 +892,46 @@ public class LibHBase implements DBOps
 		return s;
 	}
 	
+	
 	/**
 	 * 
 	 * @param tableName
 	 * @param RowKey
 	 * @return
 	 */
-	public Result getRecord(String tableName,String RowKey) throws ElementNotFoundException,TableNotFoundException
+	public HashMap<String, Result> getManyRecords(String tableName,ArrayList<String> RowKeys) throws IOException,TableNotFoundException
+	{
+		Result rs;
+		HashMap<String,Result> all=new HashMap<String,Result>();
+		try
+		{
+			for(String rowKey:RowKeys)
+			{
+				HTable table = getTableHandler(tableName);
+		        Get get = new Get(Bytes.toBytes(rowKey));
+		        rs = table.get(get);
+		        if(rs==null || rs.isEmpty())
+		        {
+		        	System.out.println("No element present with key "+rowKey);
+		        	continue;
+		        }
+		        all.put(rowKey,rs);
+		    }
+	    }
+		catch(IOException ioex)
+		{
+			System.out.println("Some IO exception while handling fetching of rows");
+			throw ioex;
+		}
+		return all;
+	}
+	/**
+	 * 
+	 * @param tableName
+	 * @param RowKey
+	 * @return
+	 */
+	public Result getRecord(String tableName,String RowKey) throws IOException,ElementNotFoundException,TableNotFoundException
 	{
 		Result rs;
 		try
@@ -911,8 +944,8 @@ public class LibHBase implements DBOps
 	    }
 		catch(IOException ioex)
 		{
-			ioex.printStackTrace();
-			return null;
+			System.out.println("Some IO exception while handling fetching of rows");
+			throw ioex;
 		}
 		return rs;
 	}
@@ -1061,19 +1094,19 @@ public class LibHBase implements DBOps
 				System.out.println("we are getting "+s);
 			}
 	
-			/*tst.clear();
-	
-			tst.add("044892|044356|044376");
-			tst.add("044892|044376|044356");
-			tst.add("044376|044892|044356");
-			tst.add("044376|044356|044892");
-			tst.add("044356|044376|044892");
-			tst.add("044356|044892|044376");
+			// 098196|098227|099003
+			tst.clear();
+			tst.add("099003|098196|098227");
+			tst.add("099003|098227|098196");
+			tst.add("098227|099003|098196");
+			tst.add("098227|098196|099003");
+			tst.add("098196|098227|099003");
+			tst.add("098196|099003|098227");
 			str = getID(tst,"\\|");
 			for(String s: str)
 			{
 				System.out.println("we are getting "+s);
-			}*/
+			}
 		}
 		catch(ElementNotFoundException exe)
 		{
