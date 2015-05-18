@@ -66,7 +66,7 @@ public class M_pai_rush extends TableMapper<Text,Text>
 		int position=0;
 		for(byte[] key:keys) // transform KV pairs
 		{
-			colMap[position]=Integer.valueOf(Bytes.toString(key));
+			colMap[position]=Bytes.toInt(key);
 			rowMap.put(position,new String(origRowMap.get(key)));
 			position++;
 		}
