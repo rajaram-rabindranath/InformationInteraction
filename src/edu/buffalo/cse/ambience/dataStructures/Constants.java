@@ -17,4 +17,6 @@ public class Constants
 	public static final String DELIM_TAB="\t";
 	public static final String mapTblQual="map";
 	public static final int FLUSH_INTERVAL_DEFAULT=5;
+	public static final String kwiiQual="KWII";
+	public static final String paiQual="PAI";
 }
