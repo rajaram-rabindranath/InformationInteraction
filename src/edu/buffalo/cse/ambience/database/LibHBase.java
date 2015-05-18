@@ -815,10 +815,12 @@ public class LibHBase implements DBOps
 		{
 			ArrayList<String> currentRow =  rows.get(i);
 			Put objput = new Put(Bytes.toBytes(i));
+			/**
+			 * VERY IMPORTANT - NOTE
+			 * Bytes.toBytes(j) -- to maintain column order sanity
+			 */
 			for(int j=0;j<colSize;j++)
-			{
-				objput.add(indVars, Bytes.toBytes(Integer.toString(j)), Bytes.toBytes(currentRow.get(j)));
-			}
+				objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
 		}
@@ -847,10 +849,12 @@ public class LibHBase implements DBOps
 			ArrayList<String> currentRow =  rows.get(i);
 			rowKey=prefix+suffix;
 			Put objput = new Put(Bytes.toBytes(rowKey));
+			/**
+			 * VERY IMPORTANT - NOTE
+			 * Bytes.toBytes(j) -- to maintain column order sanity
+			 */
 			for(int j=0;j<colSize;j++)
-			{
-				objput.add(indVars, Bytes.toBytes(Integer.toString(j)), Bytes.toBytes(currentRow.get(j)));
-			}
+				objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j))); 
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
 			suffix++;
@@ -894,16 +898,16 @@ public class LibHBase implements DBOps
 	 * @param RowKey
 	 * @return
 	 */
-	public Result getRecord(String tableName,String RowKey) throws TableNotFoundException
+	public Result getRecord(String tableName,String RowKey) throws ElementNotFoundException,TableNotFoundException
 	{
 		Result rs;
 		try
 		{
 			HTable table = getTableHandler(tableName);
-	        Get get = new Get(RowKey.getBytes());
+	        Get get = new Get(Bytes.toBytes(RowKey));
 	        rs = table.get(get);
-	        if(rs == null || rs.isEmpty())
-	        	return null;
+	        if(rs==null || rs.isEmpty())
+	        	throw new ElementNotFoundException();
 	    }
 		catch(IOException ioex)
 		{
@@ -1039,39 +1043,47 @@ public class LibHBase implements DBOps
 	{
 		return false;
 	}
+	public void tstMapping() throws IOException, NumberFormatException
+	{
+		try
+		{
+			ArrayList<String> tst=new ArrayList<String>();
+			tst.add("15|0|1");
+			tst.add("15|1|0");
+			tst.add("1|15|0");
+			tst.add("1|0|15");
+			tst.add("0|1|15");
+			tst.add("0|15|1");
+			ArrayList<String> str;
+			str=getVar(tst, "\\|");
+			for(String s: str)
+			{
+				System.out.println("we are getting "+s);
+			}
+	
+			/*tst.clear();
+	
+			tst.add("044892|044356|044376");
+			tst.add("044892|044376|044356");
+			tst.add("044376|044892|044356");
+			tst.add("044376|044356|044892");
+			tst.add("044356|044376|044892");
+			tst.add("044356|044892|044376");
+			str = getID(tst,"\\|");
+			for(String s: str)
+			{
+				System.out.println("we are getting "+s);
+			}*/
+		}
+		catch(ElementNotFoundException exe)
+		{
+			System.out.println("Element not Found");
+		}
+	}
+		
 }
 
 
 
-/*
 
-public void tstMapping() throws IOException, NumberFormatException
-	{
-		ArrayList<String> tst=new ArrayList<String>();
-	tst.add("15|0|1");
-	tst.add("15|1|0");
-	tst.add("1|15|0");
-	tst.add("1|0|15");
-	tst.add("0|1|15");
-	tst.add("0|15|1");
-	ArrayList<String> str;
-	str=getVar(tst, "\\|");
-	for(String s: str)
-	{
-		System.out.println("we are getting "+s);
-	}
-	
-	tst.clear();
-	
-	tst.add("044892|044356|044376");
-	tst.add("044892|044376|044356");
-	tst.add("044376|044892|044356");
-	tst.add("044376|044356|044892");
-	tst.add("044356|044376|044892");
-	tst.add("044356|044892|044376");
-	str = getID(tst,"\\|");
-	for(String s: str)
-	{
-		System.out.println("we are getting "+s);
-	}
-	}*/
+
