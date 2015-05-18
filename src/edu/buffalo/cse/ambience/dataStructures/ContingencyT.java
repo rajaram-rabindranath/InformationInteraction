@@ -36,6 +36,19 @@ public class ContingencyT
 	
 	public void printCTable()
 	{
-		
+		System.out.println("The combo");
+		print(combo);
+		System.out.println("The combo and target");
+		print(combo_n_target);
+		System.out.println("The target");
+		print(target);
+	}
+	
+	private void print(HashBag bag)
+	{
+		for(String val : (Set<String>)bag.uniqueSet())
+		{
+			System.out.println(val+"----"+bag.getCount(val));
+		}
 	}
 }
