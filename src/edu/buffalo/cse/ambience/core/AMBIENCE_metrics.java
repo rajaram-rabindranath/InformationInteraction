@@ -4,12 +4,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.NavigableMap;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
-import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
@@ -28,11 +25,15 @@ import edu.buffalo.cse.ambience.math.Information;
 public class AMBIENCE_metrics implements ambienceDBops
 {
 
-	private LibHBase HBase;
+	private LibHBase DBase; // FIXME must be an interface with all the common functions
+	private static final byte[] kwiiFam=Bytes.toBytes(AMBIENCE_tables.mutualInfo.getColFams()[0]);
+	private static final byte[] paiFam=Bytes.toBytes(AMBIENCE_tables.mutualInfo.getColFams()[0]);
+	private static final byte[] kwiiQual=Bytes.toBytes(Constants.kwiiQual);
+	private static final byte[] paiQual=Bytes.toBytes(Constants.paiQual);
 	
-	public AMBIENCE_metrics(LibHBase HBase)
+	public AMBIENCE_metrics(LibHBase DBase)
 	{
-		this.HBase=HBase;
+		this.DBase=DBase;
 	}
 	
 	/**
@@ -41,13 +42,28 @@ public class AMBIENCE_metrics implements ambienceDBops
    	@Override
    	public double getKWII(String vars,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
-		gyan g = new gyan(HBase.getID(vars, delim),vars);
-   		return getKWII(g);
+   		String combID=DBase.getID(vars, delim);
+   		String miTable=AMBIENCE_tables.mutualInfo.getName();
+   		byte[] rslt;
+   		try
+   		{
+   			if((rslt=DBase.getRecord(miTable,combID).getValue(kwiiFam,kwiiQual))==null)
+   			{
+   				gyan g = new gyan(combID,vars);
+   	   			return getKWII(g);
+   			}	
+   			return Double.valueOf(Bytes.toString(rslt));
+   		}
+   		catch(TableNotFoundException tnfex)
+   		{
+   			gyan g = new gyan(combID,vars);
+   			return getKWII(g);
+   		}
    	}
    	
    	public double getKWII(gyan g) throws IOException,NumberFormatException,ElementNotFoundException
 	{
-		ContingencyT ctbl=getCTable(g);
+   		ContingencyT ctbl=getCTable(g);
    		return Information.KWII(ctbl,g.korder);
    	}
 
@@ -58,8 +74,23 @@ public class AMBIENCE_metrics implements ambienceDBops
    	@Override
    	public double getPAI(String vars,String delim) throws IOException,NumberFormatException,ElementNotFoundException
    	{
-   		gyan g = new gyan(HBase.getID(vars, delim),vars);
-   		return getPAI(g);
+   		String combID=DBase.getID(vars, delim);
+   		String miTable=AMBIENCE_tables.mutualInfo.getName();
+   		byte[] rslt;
+   		try
+   		{
+   			if((rslt=DBase.getRecord(miTable,combID).getValue(paiFam,paiQual))==null)
+   			{
+   				gyan g = new gyan(combID,vars);
+   	   			return getKWII(g);
+   			}	
+   			return Double.valueOf(Bytes.toString(rslt));
+   		}
+   		catch(TableNotFoundException tnfex)
+   		{
+   			gyan g = new gyan(combID,vars);
+   			return getPAI(g);
+   		}
    	}
    	public double getPAI(gyan g) throws IOException,NumberFormatException,ElementNotFoundException
 	{
@@ -73,8 +104,8 @@ public class AMBIENCE_metrics implements ambienceDBops
 	@Override
 	public double getEntropy(String vars,String delim) throws IOException,NumberFormatException,ElementNotFoundException
 	{
-		gyan g = new gyan(HBase.getID(vars, delim),vars);
-		return getEntropy(g);
+		gyan g =new gyan(DBase.getID(vars, delim),vars);
+   		return getEntropy(g);
 	}
 	
 	public double getEntropy(gyan g) throws IOException,ElementNotFoundException,NumberFormatException
@@ -92,7 +123,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		{
 			try
 			{
-				listg.add(new gyan(HBase.getID(s, delim),s));
+				listg.add(new gyan(DBase.getID(s, delim),s));
 			}
 			catch(ElementNotFoundException enfex)
 			{
@@ -108,7 +139,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		for(gyan g:listg)
 		{
 			try
-			{ctblMap.put(g,getCTable(g));} // FIXME
+			{ctblMap.put(g,getCTable(g));}
 			catch(ElementNotFoundException enfex)
 			{
 				System.out.println(g.combID+" does not exist!");
@@ -126,7 +157,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 	@Override
 	public ContingencyT getCTable(String vars,String delim) throws IOException,ElementNotFoundException,NumberFormatException
 	{
-		gyan g = new gyan(HBase.getID(vars, delim),vars);
+		gyan g = new gyan(DBase.getID(vars, delim),vars);
 		return getCTable(g);
 	}
 	
@@ -142,16 +173,14 @@ public class AMBIENCE_metrics implements ambienceDBops
 		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.contingency.getColFams()[0]);
 		try
 		{
-			HTable ctblHandle=HBase.getTableHandler(contTbl);
 			if(!g.isIDTranslated)
-				g.combID=HBase.getID(g.comb,Constants.COMB_SPLIT);
-			NavigableMap<byte[],byte[]> map=ctblHandle.get(new Get(Bytes.toBytes(g.combID))).getFamilyMap(colfam);
-			ctbl=new ContingencyT(map);
+				g.combID=DBase.getID(g.comb,Constants.COMB_SPLIT);
+			ctbl=new ContingencyT(DBase.getRecord(contTbl,g.combID).getFamilyMap(colfam));
 		}
 		catch(IOException ioex)
 		{
 			ioex.printStackTrace();
-			System.out.println("SOME PROBLEMs GETTINg CONTINGENCY TBALE!!!");
+			System.out.println("SOME PROBLEMS GETTING CONTINGENCY TBALE!!!");
 			return ctbl;
 		}
 		catch(TableNotFoundException tnfex)
@@ -172,7 +201,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		byte[] colfam=Bytes.toBytes(topTbl.getColFams()[0]);
 		try
 		{
-			HTable table = HBase.getTableHandler(topTbl.getName());
+			HTable table = DBase.getTableHandler(topTbl.getName());
 			Scan scan = new Scan();
 			scan.setCaching(T); 
 			scan.setMaxVersions(Integer.MAX_VALUE);
@@ -181,13 +210,13 @@ public class AMBIENCE_metrics implements ambienceDBops
 			String key;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
 			{
-				double metric=HBase.orderedRep(result.getRow(),order);
+				double metric=DBase.orderedRep(result.getRow(),order);
 			    List<Cell> values =result.getColumnCells(colfam,qual);
 			    for(Cell c: values)
 			    {	
 			    	key=Bytes.toString(CellUtil.cloneValue(c));
 			    	try
-			    	{top.add(new gyan(key,HBase.getVar(key,Constants.COMB_SPLIT),metric));}
+			    	{top.add(new gyan(key,DBase.getVar(key,Constants.COMB_SPLIT),metric));}
 			    	catch(ElementNotFoundException enfex)
 			    	{
 			    		System.out.println(key+" does not have proper mapping");
@@ -200,7 +229,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		catch(IOException ioex)
 		{
 			ioex.printStackTrace();
-			System.out.println("Problem accessing topT!!");
+			System.out.println("Problem accessing `topT!!");
 		}
 		catch(TableNotFoundException tnfex)
 		{
