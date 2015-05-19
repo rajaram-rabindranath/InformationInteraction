@@ -83,7 +83,7 @@ public class M_higherOder_simple extends TableMapper<Text,Text>
 		for(byte[] key:origMap.keySet()) // transform KV pairs 
 		{
 			rowMap.put(position,new String(origMap.get(key))); // mapping colID to index[0...n]
-			colMap[position]=Integer.valueOf(Bytes.toString(key)); // mapping index[0...n] to colID 
+			colMap[position]=Bytes.toInt(key); // mapping index[0...n] to colID 
 			position++;
 		}
 		

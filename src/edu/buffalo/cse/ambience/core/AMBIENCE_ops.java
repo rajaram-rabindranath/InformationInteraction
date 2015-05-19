@@ -7,7 +7,6 @@ public enum AMBIENCE_ops
 	T,
 	CONT,
 	ALL,
-	ENT,
 	SKIP,
 	SKIPC,
 	ITER,

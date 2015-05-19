@@ -76,6 +76,8 @@ public class M_pai_periodic extends TableMapper<Text,Text>
 		}
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
 		rows.add(new RowObj(colMap, rowMap, targetValue));
+		if(rowMap.size()!=nCols)
+			System.out.println("COLS # does not match --- please chck "+rowMap.size()+" | "+nCols);
     	numRecords++;
     }
 	

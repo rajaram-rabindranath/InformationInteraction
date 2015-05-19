@@ -8,17 +8,16 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
+
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 
-import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MaximizeAction;
+
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.compress.CompressionCodec;
@@ -27,7 +26,6 @@ import org.apache.hadoop.io.compress.SnappyCodec;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.TaskReport;
 import org.apache.hadoop.mapreduce.TaskType;
-
 import com.hadoop.compression.lzo.LzoCodec;
 
 import edu.buffalo.cse.ambience.parameters.CLI;
@@ -36,8 +34,6 @@ import edu.buffalo.cse.ambience.dataStructures.Constants;
 import edu.buffalo.cse.ambience.dataStructures.Rows;
 import edu.buffalo.cse.ambience.dataStructures.Table;
 import edu.buffalo.cse.ambience.dataStructures.VarClass;
-import edu.buffalo.cse.ambience.dataStructures.gyan;
-import edu.buffalo.cse.ambience.database.ElementNotFoundException;
 import edu.buffalo.cse.ambience.database.LibHBase;
 import edu.buffalo.cse.ambience.database.TableNotFoundException;
 
@@ -53,7 +49,6 @@ public abstract class AMBIENCE
 	LibHBase HBase=null;
 	public abstract boolean kwii(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean pai(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
-	public abstract boolean entropy(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean contigency(Job job,String sinkT) throws IOException, InterruptedException,ClassNotFoundException;
 	public abstract boolean all(Job job) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean kwiiList(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
@@ -93,45 +88,10 @@ public abstract class AMBIENCE
 			strVarList=cli.getVarList();
 	}
 	
-	void chk()
-	{
-		HBase = LibHBase.getInstance(hdfsConf);
-		HBase.setTblSuffix("4"); // for the sake of CCR loads
-		try
-		{
-			HBase.tstMapping();
-		}
-		catch(IOException ioex){System.out.println("IO EX");}
-		if(true) return;
-		AMBIENCE_metrics met= new AMBIENCE_metrics(HBase);
-		String vars="098196|098227|098238";
-		String delim="\\|";
-		
-		try
-		{
-			double PAI=met.getPAI(vars, delim);
-			double Kwii=met.getKWII(vars, delim);
-			double ent=met.getEntropy(vars,delim);
-			
-			System.out.println("PAI "+PAI);
-			System.out.println("Kwii"+ Kwii);
-			System.out.println("Ent "+ent);
-			//met.getCTable(vars, delim).printCTable();;
-		}
-		catch(IOException ex)
-		{
-			System.out.println("There has been an IO exception!!!!");
-		}
-		catch(ElementNotFoundException nex)
-		{
-			System.out.println("Element was not found!");
-		}
-	}
 	
 	public boolean bootup()
 	{
-		chk();
-		if(true) return false;
+		
 		if(oper.equals(AMBIENCE_ops.NONE))
 			return false;
 		if(!readInput(fname,mode,Constants.DELIM_TAB)) return false;
@@ -148,7 +108,6 @@ public abstract class AMBIENCE
 		}	
 		else
 			mrParams.put(MRParams.SET_SIZE,Integer.toString(data.getMRColsCnt()));
-		
 		mrParams.put(MRParams.JOBID,jobID);
 		mrParams.put(MRParams.K_WAY,Kway);
 		mrParams.put(MRParams.REDUCER_CNT,reducerCnt);
@@ -182,10 +141,12 @@ public abstract class AMBIENCE
 		s=HBase.getScanner(AMBIENCE_tables.source);
 		if(oper.equals(AMBIENCE_ops.ITER) || oper.equals(AMBIENCE_ops.SKIP) || oper.equals(AMBIENCE_ops.SKIPC))
 			HBase.setRejectVal(s,mrParams.get(MRParams.INVALID_VALUE));
+		
 		if(!HBase.setupMapping(data.getColumns().c,tblSuffix)) return false;
 		System.out.println("Mapping tables created!");
 		if(!HBase.createTable(srcTblname,srcColFams,splitCnt))return false;
 		System.out.println("SRC TABLE CREATED");
+		
 		try
 		{
 			if(!HBase.loadData(srcTblname,data.getColumns().c,data.getRows().r,srcColFams))return false;
@@ -238,7 +199,7 @@ public abstract class AMBIENCE
 		try
 		{
 			Job job = new Job(conf,oper.toString());
-			/*conf.setBoolean("mapreduce.compress.map.output",true);
+			/*conf.setBoolean("mapreduce.compress.map.output",true); --- FIXME using codec to compress map output
 			conf.setClass("mapreduce.map.output.compress.codec",SnappyCodec.class, CompressionCodec.class);*/
 			
 			// set io percent thingy
@@ -283,9 +244,6 @@ public abstract class AMBIENCE
 				case CONT:
 					s.addFamily(Bytes.toBytes(src_cf[1])); // add the targetVar family
 					contigency(job, sinkT);
-					break;
-				case ENT:
-					entropy(job,sinkT);
 					break;
 				default:
 					return false;
@@ -621,3 +579,41 @@ public abstract class AMBIENCE
 		return subsets;
 	}
 }
+
+
+
+/* -- testing mapping and contingency tables ---- done and works
+void chk()
+{
+	HBase = LibHBase.getInstance(hdfsConf);
+	HBase.setTblSuffix("4"); // for the sake of CCR loads
+	try
+	{
+		HBase.tstMapping();
+	}
+	catch(IOException ioex){System.out.println("IO EX");}
+	if(true) return;
+	AMBIENCE_metrics met= new AMBIENCE_metrics(HBase);
+	String vars="098196|098227|098238";
+	String delim="\\|";
+	
+	try
+	{
+		double PAI=met.getPAI(vars, delim);
+		double Kwii=met.getKWII(vars, delim);
+		double ent=met.getEntropy(vars,delim);
+		
+		System.out.println("PAI "+PAI);
+		System.out.println("Kwii"+ Kwii);
+		System.out.println("Ent "+ent);
+		//met.getCTable(vars, delim).printCTable();;
+	}
+	catch(IOException ex)
+	{
+		System.out.println("There has been an IO exception!!!!");
+	}
+	catch(ElementNotFoundException nex)
+	{
+		System.out.println("Element was not found!");
+	}
+}*/

@@ -3,12 +3,8 @@ package edu.buffalo.cse.ambience.core;
 import java.io.IOException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.filter.ByteArrayComparable;
-import org.apache.hadoop.hbase.filter.ValueFilter;
-import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.mapreduce.MultiTableOutputFormat;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 
@@ -18,7 +14,6 @@ import edu.buffalo.cse.ambience.HBase.Combiners.C_kwii;
 import edu.buffalo.cse.ambience.HBase.Combiners.C_kwiiList;
 import edu.buffalo.cse.ambience.HBase.Combiners.C_pai;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_contingency;
-import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_entropy;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_higherOder_simple;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwii;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_kwiiList;
@@ -30,7 +25,6 @@ import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_periodic;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_rush;
 import edu.buffalo.cse.ambience.HBase.MR.Mappers.M_pai_skipper;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_contingency;
-import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_entropy;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_kwii;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_kwiiList;
 import edu.buffalo.cse.ambience.HBase.MR.Reducers.R_pai;
@@ -85,19 +79,7 @@ public class AMBIENCE_discrete extends AMBIENCE
         job.waitForCompletion(true);
         return false;
 	}
-	@Override
-	public boolean entropy(Job job, String sinkT) throws IOException,	InterruptedException, ClassNotFoundException 
-	{
-		job.setOutputFormatClass(MultiTableOutputFormat.class);
-        job.setMapperClass(M_entropy.class);
-        job.setCombinerClass(C_entropy.class);
-        job.setReducerClass(R_entropy.class);
-        TableMapReduceUtil.addDependencyJars(job);
-        TableMapReduceUtil.addDependencyJars(job.getConfiguration());
-        TableMapReduceUtil.initTableMapperJob(AMBIENCE_tables.source.getName(),s, M_entropy.class, Text.class,Text.class,job);
-        job.waitForCompletion(true);
-		return false;
-	}
+	
 	@Override
 	public boolean all(Job job) throws IOException, InterruptedException,ClassNotFoundException 
 	{

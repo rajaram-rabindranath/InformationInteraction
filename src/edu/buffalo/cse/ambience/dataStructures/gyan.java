@@ -15,6 +15,7 @@ public class gyan
 	public boolean isIDTranslated=false;
 	public boolean isVARTranslated=false;
 	public ArrayList<Integer> intCombID=new ArrayList<Integer>();
+	public ContingencyT ctbl;
 	
 	/**
 	 * @param combID
@@ -80,5 +81,24 @@ public class gyan
 			korder=0;
 		this.isIDTranslated=true;
 		this.isVARTranslated=true;
+	}
+	
+	public void setContingencyTbl(ContingencyT ctbl)
+	{
+		this.ctbl=ctbl;
+	}
+	
+	public ContingencyT getContingencyTbl()
+	{
+		return ctbl;
+	}
+	
+	/**
+	 * inserts a variable into the combination at the right place
+	 * @param var
+	 */
+	public void insert(String var)
+	{
+		
 	}
 }

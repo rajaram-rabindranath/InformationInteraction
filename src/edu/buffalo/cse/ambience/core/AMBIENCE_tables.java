@@ -45,8 +45,6 @@ public enum AMBIENCE_tables
 		{
 			case CONT:
 				return AMBIENCE_tables.contingency.cf[0];
-			case ENT:
-				return AMBIENCE_tables.mutualInfo.cf[0];
 			case ALL:
 				return null;
 			case PAI:
@@ -76,7 +74,6 @@ public enum AMBIENCE_tables
 			case ITER:
 			case T:
 			case KWII:
-			case ENT:
 			case PAI:
 				return AMBIENCE_tables.mutualInfo;
 			case NONE:

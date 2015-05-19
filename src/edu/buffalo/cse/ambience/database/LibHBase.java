@@ -28,6 +28,7 @@ import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
 import org.apache.hadoop.hbase.filter.ColumnCountGetFilter;
+import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.FilterList;
 import org.apache.hadoop.hbase.filter.QualifierFilter;
@@ -334,7 +335,7 @@ public class LibHBase implements DBOps
 			Get g;
 			for(int i=0;i<mapped.length;i++)
 			{
-				g = new Get(Bytes.toBytes(ids[i])); // FIXME --- use getRecord for this
+				g = new Get(Bytes.toBytes(ids[i])); 
 				mapped[i]=Bytes.toString(tbl.get(g).getValue(colfam,qual));
 				if(mapped[i]==null) throw new ElementNotFoundException(); // if entity not present
 			}
@@ -424,16 +425,23 @@ public class LibHBase implements DBOps
 	 * @param s
 	 * @param cols
 	 * @param operation
+	 * FIXME --- does not work for more than one filter --- no point of filterlist -- 2 days wasted in this 
 	 */
 	public void setColsTo(Scan s, String[] cols,boolean operation) throws IOException,ElementNotFoundException
 	{
+		// FIXME use this for true case --- FIXME FIXME FIXME
+		/*s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("0"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("1"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("2"));
+		*/
+		
 		FilterList filterList = new FilterList();
 		Filter qualfilter;
 		CompareOp op= operation ? CompareOp.EQUAL:CompareOp.NOT_EQUAL;
 		String[] colIDs=getID(cols);
 		for(String colID:colIDs)
 		{	
-			qualfilter=new QualifierFilter(op,new BinaryComparator(Bytes.toBytes(colID)));
+			qualfilter=new QualifierFilter(op,new BinaryComparator(Bytes.toBytes(Integer.parseInt(colID))));
 			filterList.addFilter(qualfilter);
 		}
 		s.setFilter(filterList);
@@ -453,8 +461,8 @@ public class LibHBase implements DBOps
 	
 	public void setAcceptVal(Scan s,String value)
 	{
-		Filter negFilter=new ValueFilter(CompareOp.EQUAL, new BinaryComparator(Bytes.toBytes(value)));
-		s.setFilter(negFilter);
+		Filter posFilter=new ValueFilter(CompareOp.EQUAL, new BinaryComparator(Bytes.toBytes(value)));
+		s.setFilter(posFilter);
 	}
 	
 	
@@ -674,10 +682,10 @@ public class LibHBase implements DBOps
 		HTable table = null;
 		try
 		{
-			table = getTableHandler(tableName);
+			table = new HTable(conf,tableName);
 			Scan scan = new Scan();
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
-			scan.addFamily(Bytes.toBytes(colfam));
+			scan.addFamily(Bytes.toBytes("indVars"));
 			ResultScanner scanner = table.getScanner(scan);
 			int counter=0;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
@@ -692,6 +700,7 @@ public class LibHBase implements DBOps
 			    String key = Bytes.toString(result.getRow());
 			    NavigableMap<byte[], byte[]> list = entireRow.getFamilyMap(Bytes.toBytes(colfam));
 			    Set<byte[]> entry =  list.keySet();
+			    System.out.println("number of columns "+entry.size());
 			    for(byte[] colKey : entry)
             	{
 			    		System.out.println("Key="+key+"--"+"value="+Bytes.toString(list.get(colKey)));
@@ -774,6 +783,7 @@ public class LibHBase implements DBOps
 	}
 	
 	/**
+	 * FIXME -- make this generic to accept AMBIENCE_tables and Table[Data struct] as args
 	 * Load data into HBase table as specified in the arguments
 	 */
 	public boolean loadData(String tbl,ArrayList<String> colnames,
@@ -854,7 +864,7 @@ public class LibHBase implements DBOps
 			 * Bytes.toBytes(j) -- to maintain column order sanity
 			 */
 			for(int j=0;j<colSize;j++)
-				objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j))); 
+				objput.add(indVars, Bytes.toBytes(j), Bytes.toBytes(currentRow.get(j)));
 			objput.add(targetVar, Bytes.toBytes(colnames.get(colSize)), Bytes.toBytes(currentRow.get(colSize)));
 			table.put(objput);
 			suffix++;
@@ -1076,46 +1086,46 @@ public class LibHBase implements DBOps
 	{
 		return false;
 	}
-	public void tstMapping() throws IOException, NumberFormatException
-	{
-		try
-		{
-			ArrayList<String> tst=new ArrayList<String>();
-			tst.add("15|0|1");
-			tst.add("15|1|0");
-			tst.add("1|15|0");
-			tst.add("1|0|15");
-			tst.add("0|1|15");
-			tst.add("0|15|1");
-			ArrayList<String> str;
-			str=getVar(tst, "\\|");
-			for(String s: str)
-			{
-				System.out.println("we are getting "+s);
-			}
 	
-			// 098196|098227|099003
-			tst.clear();
-			tst.add("099003|098196|098227");
-			tst.add("099003|098227|098196");
-			tst.add("098227|099003|098196");
-			tst.add("098227|098196|099003");
-			tst.add("098196|098227|099003");
-			tst.add("098196|099003|098227");
-			str = getID(tst,"\\|");
-			for(String s: str)
-			{
-				System.out.println("we are getting "+s);
-			}
-		}
-		catch(ElementNotFoundException exe)
-		{
-			System.out.println("Element not Found");
-		}
-	}
 		
 }
+/*public void tstMapping() throws IOException, NumberFormatException
+{
+	try
+	{
+		ArrayList<String> tst=new ArrayList<String>();
+		tst.add("15|0|1");
+		tst.add("15|1|0");
+		tst.add("1|15|0");
+		tst.add("1|0|15");
+		tst.add("0|1|15");
+		tst.add("0|15|1");
+		ArrayList<String> str;
+		str=getVar(tst, "\\|");
+		for(String s: str)
+		{
+			System.out.println("we are getting "+s);
+		}
 
+		// 098196|098227|099003
+		tst.clear();
+		tst.add("099003|098196|098227");
+		tst.add("099003|098227|098196");
+		tst.add("098227|099003|098196");
+		tst.add("098227|098196|099003");
+		tst.add("098196|098227|099003");
+		tst.add("098196|099003|098227");
+		str = getID(tst,"\\|");
+		for(String s: str)
+		{
+			System.out.println("we are getting "+s);
+		}
+	}
+	catch(ElementNotFoundException exe)
+	{
+		System.out.println("Element not Found");
+	}
+}*/
 
 
 

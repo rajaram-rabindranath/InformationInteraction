@@ -70,6 +70,8 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 			position++;
 		}
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
+		if(rowMap.size()!=nCols)
+			System.out.println("Row size differs ----"+nCols+"---"+rowMap.size());
 		rows.add(new RowObj(colMap, rowMap, targetValue));
     	numRecords++;
     }

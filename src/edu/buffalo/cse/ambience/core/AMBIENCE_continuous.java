@@ -41,17 +41,6 @@ public class AMBIENCE_continuous extends AMBIENCE
 		return false;
 	}
 
-
-
-	@Override
-	public boolean entropy(Job job, String sinkT) throws IOException,
-			InterruptedException, ClassNotFoundException {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-
-
 	@Override
 	public boolean all(Job job) throws IOException, InterruptedException,
 			ClassNotFoundException {
