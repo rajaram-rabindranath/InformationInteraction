@@ -23,7 +23,6 @@ public class Information
 	
 	
 	/**
-	 * 
 	 * @param combo
 	 * @param target
 	 * @param combo_n_target
@@ -144,10 +143,8 @@ public class Information
 	 */
 	public static double PAI(ContingencyT ctbl) throws IOException
 	{
-		
 		return PAI(ctbl.combo, ctbl.target, ctbl.combo_n_target, ctbl.totl);
 	}
-	
 	
 	/**
 	 * 
