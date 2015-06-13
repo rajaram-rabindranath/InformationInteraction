@@ -28,6 +28,7 @@ enum UserArgs
 	MAX_ITER_FLAG("y"),
 	FLUSH_INTERVAL("a");
 	
+	
 	private String flag;
 	private UserArgs(String flag) 
 	{
@@ -69,8 +70,10 @@ public class CLI implements Arguments
 		options.addOption(UserArgs.JOBID_FLAG.getFlag(),true,"JobID");
 		options.addOption(UserArgs.METRIC_ORDER_FLAG.getFlag(),true,"Sort order of metric"); // FIXME need to catch this
 		options.addOption(UserArgs.TOP_T_FLAG.getFlag(),true,"Top T values of the metric being tracked");
+		options.addOption(UserArgs.MAX_ITER_FLAG.getFlag(),true,"Maximum Iterations for search");
 		options.addOption(UserArgs.TOP_COMBINATIONS_FLAG.getFlag(),true,"Top Combinations");
 		options.addOption(UserArgs.FLUSH_INTERVAL.getFlag(),true,"FLUSH INTERVAL");
+		
 	}
 	
 	/**
@@ -180,9 +183,9 @@ public class CLI implements Arguments
 		setTopCombinations();
 		setVarList();
 		setOperation();
+		setIterations();
 		setFlushInterval();
 	}
-	
 	
 	public String getTopCombinations()
 	{
@@ -228,6 +231,11 @@ public class CLI implements Arguments
 		return params.get(UserArgs.OPS_FLAG);
 	}
 
+	@Override
+	public String getIterations() 
+	{
+		return params.get(UserArgs.MAX_ITER_FLAG);
+	}
 	
 	public String getInvalid() 
 	{
@@ -424,5 +432,10 @@ public class CLI implements Arguments
 	private void setJobID()
 	{
 		params.put(UserArgs.JOBID_FLAG,cmd.getOptionValue(UserArgs.JOBID_FLAG.getFlag()));
+	}
+
+	private void setIterations()
+	{
+		params.put(UserArgs.MAX_ITER_FLAG,cmd.getOptionValue(UserArgs.MAX_ITER_FLAG.getFlag()));
 	}
 }

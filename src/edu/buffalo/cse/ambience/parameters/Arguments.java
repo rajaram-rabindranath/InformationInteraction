@@ -13,4 +13,5 @@ public interface Arguments
 	public String getTvalue();
 	public String getTopTOrder();
 	public String getTopCombinations();
+	public String getIterations();
 }
