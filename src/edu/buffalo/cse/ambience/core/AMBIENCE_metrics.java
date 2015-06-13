@@ -49,14 +49,14 @@ public class AMBIENCE_metrics implements ambienceDBops
    		{
    			if((rslt=DBase.getRecord(miTable,combID).getValue(kwiiFam,kwiiQual))==null)
    			{
-   				gyan g = new gyan(combID,vars);
+   				gyan g = new gyan(combID);
    	   			return getKWII(g);
    			}	
    			return Double.valueOf(Bytes.toString(rslt));
    		}
    		catch(TableNotFoundException tnfex)
    		{
-   			gyan g = new gyan(combID,vars);
+   			gyan g = new gyan(combID);
    			return getKWII(g);
    		}
    	}
@@ -64,7 +64,7 @@ public class AMBIENCE_metrics implements ambienceDBops
    	public double getKWII(gyan g) throws IOException,NumberFormatException,ElementNotFoundException
 	{
    		ContingencyT ctbl=getCTable(g);
-   		return Information.KWII(ctbl,g.korder);
+   		return Information.KWII(ctbl,g.getKorder());
    	}
 
    	
@@ -81,14 +81,14 @@ public class AMBIENCE_metrics implements ambienceDBops
    		{
    			if((rslt=DBase.getRecord(miTable,combID).getValue(paiFam,paiQual))==null)
    			{
-   				gyan g = new gyan(combID,vars);
+   				gyan g = new gyan(combID);
    	   			return getKWII(g);
    			}	
    			return Double.valueOf(Bytes.toString(rslt));
    		}
    		catch(TableNotFoundException tnfex)
    		{
-   			gyan g = new gyan(combID,vars);
+   			gyan g = new gyan(combID);
    			return getPAI(g);
    		}
    	}
@@ -104,7 +104,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 	@Override
 	public double getEntropy(String vars,String delim) throws IOException,NumberFormatException,ElementNotFoundException
 	{
-		gyan g =new gyan(DBase.getID(vars, delim),vars);
+		gyan g =new gyan(DBase.getID(vars, delim));
    		return getEntropy(g);
 	}
 	
@@ -123,7 +123,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		{
 			try
 			{
-				listg.add(new gyan(DBase.getID(s, delim),s));
+				listg.add(new gyan(DBase.getID(s, delim)));
 			}
 			catch(ElementNotFoundException enfex)
 			{
@@ -142,11 +142,11 @@ public class AMBIENCE_metrics implements ambienceDBops
 			{ctblMap.put(g,getCTable(g));}
 			catch(ElementNotFoundException enfex)
 			{
-				System.out.println(g.combID+" does not exist!");
+				System.out.println(g.getCombination()+" does not exist!");
 			}
 		}
-		for(gyan n : ctblMap.keySet())
-			n.value=Information.KWII(ctblMap.get(n),n.korder);
+		for(gyan g : ctblMap.keySet())
+			g.value=Information.KWII(ctblMap.get(g),g.getKorder());
 		return null;
 	}
 
@@ -157,7 +157,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 	@Override
 	public ContingencyT getCTable(String vars,String delim) throws IOException,ElementNotFoundException,NumberFormatException
 	{
-		gyan g = new gyan(DBase.getID(vars, delim),vars);
+		gyan g = new gyan(DBase.getID(vars, delim));
 		return getCTable(g);
 	}
 	
@@ -173,9 +173,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 		byte[] colfam=Bytes.toBytes(AMBIENCE_tables.contingency.getColFams()[0]);
 		try
 		{
-			if(!g.isIDTranslated)
-				g.combID=DBase.getID(g.comb,Constants.COMB_SPLIT);
-			ctbl=new ContingencyT(DBase.getRecord(contTbl,g.combID).getFamilyMap(colfam));
+			ctbl=new ContingencyT(DBase.getRecord(contTbl,g.getCombination()).getFamilyMap(colfam));
 		}
 		catch(IOException ioex)
 		{
@@ -196,12 +194,12 @@ public class AMBIENCE_metrics implements ambienceDBops
 	public ArrayList<gyan> topT(int T,Order order)
 	{
 		ArrayList<gyan> top=new ArrayList<gyan>();
-		AMBIENCE_tables topTbl = AMBIENCE_tables.top;
+		AMBIENCE_tables topTbl = AMBIENCE_tables.top;  
 		byte[] qual=Bytes.toBytes("ID"); // FIXME --- HARDCODED
 		byte[] colfam=Bytes.toBytes(topTbl.getColFams()[0]);
 		try
 		{
-			HTable table = DBase.getTableHandler(topTbl.getName());
+			HTable table = DBase.getTableHandler(topTbl.getName()+"4"); // FIXME
 			Scan scan = new Scan();
 			scan.setCaching(T); 
 			scan.setMaxVersions(Integer.MAX_VALUE);
@@ -215,13 +213,7 @@ public class AMBIENCE_metrics implements ambienceDBops
 			    for(Cell c: values)
 			    {	
 			    	key=Bytes.toString(CellUtil.cloneValue(c));
-			    	try
-			    	{top.add(new gyan(key,DBase.getVar(key,Constants.COMB_SPLIT),metric));}
-			    	catch(ElementNotFoundException enfex)
-			    	{
-			    		System.out.println(key+" does not have proper mapping");
-			    		top.add(new gyan(key,metric));
-			    	}
+			    	top.add(new gyan(key,metric));
 			    	if(++LIMIT==T)return top;
 			    }
 			}

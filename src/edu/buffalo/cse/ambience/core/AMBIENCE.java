@@ -8,12 +8,17 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 
 
+
+
+
+
+
+import orderly.Order;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -26,6 +31,7 @@ import org.apache.hadoop.io.compress.SnappyCodec;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.TaskReport;
 import org.apache.hadoop.mapreduce.TaskType;
+
 import com.hadoop.compression.lzo.LzoCodec;
 
 import edu.buffalo.cse.ambience.parameters.CLI;
@@ -34,6 +40,7 @@ import edu.buffalo.cse.ambience.dataStructures.Constants;
 import edu.buffalo.cse.ambience.dataStructures.Rows;
 import edu.buffalo.cse.ambience.dataStructures.Table;
 import edu.buffalo.cse.ambience.dataStructures.VarClass;
+import edu.buffalo.cse.ambience.dataStructures.gyan;
 import edu.buffalo.cse.ambience.database.LibHBase;
 import edu.buffalo.cse.ambience.database.TableNotFoundException;
 
@@ -55,9 +62,11 @@ public abstract class AMBIENCE
 	public abstract boolean skip(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean skipC(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
 	public abstract boolean iter(Job job,String sinkT) throws IOException, InterruptedException, ClassNotFoundException;
+	public abstract boolean ambi(Job job,String sinkT) throws IOException,InterruptedException, ClassNotFoundException;
+	public abstract boolean pairwise_pai(Job job,String sinkT) throws IOException,InterruptedException, ClassNotFoundException;
 	public abstract boolean start();
 	String fname,mode,strVarList,jobID,Kway,reducerCnt,invalid,TopCombos,TopTOrder,Tvalue;
-	int splitCnt,flushInterval;
+	int splitCnt,flushInterval,iter=0;
 	boolean haveVarList=false;
 	
 	public AMBIENCE(CLI cli,Configuration conf)
@@ -69,6 +78,7 @@ public abstract class AMBIENCE
 	
 	private void argsInit()
 	{
+		String flushIntervalStr,iterStr;
 		fname=cli.getFileName();
 		splitCnt=Integer.valueOf(cli.getSplitsCnt());
 		oper=AMBIENCE_ops.resolveOps(cli.getOperation());
@@ -80,10 +90,10 @@ public abstract class AMBIENCE
 		TopCombos=cli.getTopCombinations();
 		TopTOrder=cli.getTopTOrder();
 		Tvalue=cli.getTvalue();
-		if(cli.getFlushInterval()!=null)
-		{
-			flushInterval=Integer.valueOf(cli.getFlushInterval());
-		}
+		if((iterStr=cli.getIterations())!=null)
+			iter=Integer.valueOf(iterStr);
+		if((flushIntervalStr=cli.getFlushInterval())!=null)
+			flushInterval=Integer.valueOf(flushIntervalStr);
 		if(haveVarList=cli.hasVarList())
 			strVarList=cli.getVarList();
 	}
@@ -92,6 +102,14 @@ public abstract class AMBIENCE
 	public boolean bootup()
 	{
 		
+		/*AMBIENCE_metrics m = new AMBIENCE_metrics(LibHBase.getInstance(hdfsConf));
+		for(gyan g: m.topT(10, Order.DESCENDING))
+		{
+			System.out.println(g.getCombination()+"  "+g.value);
+		}
+		
+		if(true) return false;
+		*/
 		if(oper.equals(AMBIENCE_ops.NONE))
 			return false;
 		if(!readInput(fname,mode,Constants.DELIM_TAB)) return false;
@@ -162,6 +180,9 @@ public abstract class AMBIENCE
 		System.out.println("JOBSTATS TABLE CREATED");
 		if(!HBase.createTable(topTTblname,AMBIENCE_tables.top.getColFams()))return false;
 		System.out.println("TOPK TABLE CREATED");
+		try{HBase.enableVersionSafe(topTTblname);}
+		catch(TableNotFoundException tbnex)
+		{System.out.println("Top t table not found");return false;}
 		if(!HBase.createTable(sinkTblname,sink.getColFams()))return false;
 		System.out.println("SINK TABLE CREATED");
 		dbSetupDebug();
@@ -198,6 +219,9 @@ public abstract class AMBIENCE
 		String[] src_cf =AMBIENCE_tables.source.getColFams();
 		try
 		{
+			
+			//HBase.getConf().set(MRParams.TOP_COMBINATIONS.toString(),"3|9,2|9,4|9,3|8,2|8,4|8"); // FIXME -- temp setting
+			//HBase.getConf().set(MRParams.TOP_COMBINATIONS.toString(),"0|1,6|18,9|10"); // FIXME -- temp setting
 			Job job = new Job(conf,oper.toString());
 			/*conf.setBoolean("mapreduce.compress.map.output",true); --- FIXME using codec to compress map output
 			conf.setClass("mapreduce.map.output.compress.codec",SnappyCodec.class, CompressionCodec.class);*/
@@ -244,6 +268,9 @@ public abstract class AMBIENCE
 				case CONT:
 					s.addFamily(Bytes.toBytes(src_cf[1])); // add the targetVar family
 					contigency(job, sinkT);
+					break;
+				case AMBI:
+					ambienceSearch1(job,sinkT);
 					break;
 				default:
 					return false;
@@ -486,7 +513,11 @@ public abstract class AMBIENCE
 	 
 	}
 	
-	
+	/**
+	 * 
+	 * @param candidates
+	 * @return
+	 */
    	private ArrayList<Integer> findCommon(ArrayList<ArrayList<Integer>> candidates)
    	{
    		ArrayList<Integer> first,second,rslt;
@@ -500,15 +531,21 @@ public abstract class AMBIENCE
    		return rslt;
    	}
    	
-   	private ArrayList<Integer> intersect(ArrayList<Integer> a,ArrayList<Integer> b)
+   	/**
+   	 * 
+   	 * @param a
+   	 * @param b
+   	 * @return
+   	 */
+   	public static ArrayList<Integer> intersect(ArrayList<Integer> a,ArrayList<Integer> b)
 	{
 		int indexA=0,indexB=0;
 		int sizeA=a.size(),sizeB=b.size();
 		ArrayList<Integer> common=new ArrayList<Integer>();
-		Integer A,B;
+		int A,B;
 		while(indexA<sizeA && indexB<sizeB)
 		{
-			A=a.get(indexA);B=b.get(indexB);
+			A=a.get(indexA).intValue();B=b.get(indexB).intValue();
 			if(A==B)
 			{
 				common.add(A);
@@ -517,9 +554,7 @@ public abstract class AMBIENCE
 			else if(A<B)
 				indexA++;
 			else
-			{
 				indexB++;
-			}
 		}
 		return common;
 	}
@@ -578,6 +613,156 @@ public abstract class AMBIENCE
 			subsets.add(new int[]{i});
 		return subsets;
 	}
+	
+	
+	public void ambienceSearch(Job job,String sinkT) throws IOException,InterruptedException,ClassNotFoundException
+	{
+		AMBIENCE_metrics metrics=new AMBIENCE_metrics(HBase);
+		AMBIENCE_tables srctable=AMBIENCE_tables.source;
+		String[] src_cf=srctable.getColFams();
+		
+		s=HBase.getScanner(srctable);
+		s.addFamily(Bytes.toBytes(src_cf[1]));
+		iter(job,sinkT);
+	}
+	
+	public void ambienceSearch1(Job job,String sinkT) throws IOException,InterruptedException,ClassNotFoundException
+	{
+		if(iter==0)
+		{
+			System.out.println("the number of iterations is "+0);
+			return;
+		}
+		/**
+		 * Scaffolding ---
+		 * 1. Scanner 
+		 * 2. Accessing top table
+		 * 3. Iterating mechanism
+		 * 4. the top t of each iteration must be printed out to a file maybe of stored in a buffered reader
+		 * 	and printed out 
+		 */
+		double[] timeTaken=new double[iter];
+		double[] fractionTotTime=new double[iter];
+		ArrayList<ArrayList<Integer>> commonElements=new ArrayList<ArrayList<Integer>>();
+		StringBuilder debug = new StringBuilder();
+		AMBIENCE_tables srctable=AMBIENCE_tables.source;
+		AMBIENCE_metrics metrics=new AMBIENCE_metrics(HBase);
+		String[] src_cf=srctable.getColFams();
+		s.addFamily(Bytes.toBytes(src_cf[1]));
+		ArrayList<ArrayList<Integer>> top=new ArrayList<ArrayList<Integer>>(); // hold all the top combinations
+		StringBuilder candidates=new StringBuilder(),commons=new StringBuilder();
+		ArrayList<Integer> common;
+		int count=1; // keeping count of the # of iterations
+		int t=Integer.parseInt(Tvalue); // the # of top combinations to collect
+		double totalTime=0;
+		
+		/** 
+		 * Compute pairwise pai -- to get first order top variables
+		 */
+		long startNano = System.nanoTime();
+		pairwise_pai(job, sinkT); 
+		long estNano = System.nanoTime() - startNano;
+		timeTaken[0]=(double)estNano/1000000;
+		totalTime=timeTaken[0];
+		HBase.printJobStats(cli.getJobID());
+		
+		// mapper and reducer stats for 
+		while(count!=iter)
+		{
+			candidates.setLength(0);
+			commons.setLength(0);
+			top.clear();
+			debug.append("\n\n\n# iter ");
+			debug.append("\n");
+			for(gyan g: metrics.topT(t,Order.DESCENDING))
+			{
+				ArrayList<Integer> val = new ArrayList<Integer>();
+				String comb=g.getCombination();
+				debug.append(comb+"  "+g.value);
+				debug.append("\n");
+				candidates.append(comb);candidates.append(",");
+				for(String s : comb.split(Constants.COMB_SPLIT))
+					val.add(Integer.valueOf(s));
+				top.add(val);
+			}
+			candidates.deleteCharAt(candidates.length()-1);
+			if(!HBase.createTable(AMBIENCE_tables.top.getName()+cli.getJobID(),AMBIENCE_tables.top.getColFams()))
+			{
+				System.out.println("Could not create the top table!!");
+				return;
+			}
+			if(!HBase.createTable(AMBIENCE_tables.jobStats.getName()+cli.getJobID(),AMBIENCE_tables.jobStats.getColFams()))
+			{
+				System.out.println("Cannot refresh the job stats table");
+				return;
+			}
+			System.out.println("JOBSTATS TABLE CREATED");
+			System.out.println("TOPK TABLE CREATED");
+			// must change scannner -- with each iteration
+			common=findCommon(top);
+			System.out.println(debug);
+			HBase.getConf().set(MRParams.TOP_COMBINATIONS.toString(),candidates.toString());
+			HBase.getConf().set(MRParams.K_WAY.toString(),Integer.toString(count+1));
+			if(common!=null) // Sharing with MR job the common variables of top combinations
+			{
+				//Integer[] comArray=common.toArray(new Integer[common.size()]);
+				for(Integer i:common)
+				{
+					commons.append(i.intValue());commons.append(",");
+				}
+				HBase.getConf().set(MRParams.COMMON_VARIABLES.toString(),commons.toString());
+			}
+			if(common!=null) // debug -- FIXME remove me later
+			{
+				debug.append("Common elements we have found");
+				System.out.println("Commom elements that we have found!!!");
+				for(Integer com:common)
+					debug.append(com+"\n");
+			}
+			job = new Job(HBase.getConf(),oper.toString());
+			s=HBase.getScanner(srctable);
+			s.addFamily(Bytes.toBytes(src_cf[1]));
+			job.setNumReduceTasks(Integer.valueOf(mrParams.get(MRParams.REDUCER_CNT))); // FIXME -- need to make this configurable
+			
+			startNano=System.nanoTime();
+			iter(job,sinkT);
+			estNano=System.nanoTime()-startNano;
+			timeTaken[count]=(double)estNano/1000000;
+			totalTime+=timeTaken[count];
+			if(!job.isSuccessful())
+			{
+				System.out.println("For iteration #"+count+" job failed");
+				break;
+			}
+			HBase.printJobStats(cli.getJobID());
+			//getDiagnostics(job);
+			count++;
+		}
+		
+		// time taken distribution across many iterations
+		for(int i=0;i<iter;i++)
+			fractionTotTime[i]=timeTaken[i]/totalTime;
+		debug.append("Last and final results!\n");
+		
+		for(gyan g : metrics.topT(t,Order.DESCENDING))
+		{
+			debug.append(g.getCombination()+" "+g.value);
+			debug.append("\n");
+		}
+		System.out.println("The results for each iteration ----");
+		System.out.println(debug);
+		// display time statistics
+		System.out.println("Time taken statistics------ T="+Tvalue+" & # of iterations="+iter);
+		System.out.println("Total Time taken ="+totalTime);
+		for(int i=0;i<iter;i++)
+			System.out.println("Time taken "+timeTaken[i]+" fraction="+fractionTotTime[i]);
+	}
+	
+	public void ambienceIterations()
+	{
+		
+	}
+	
 }
 
 

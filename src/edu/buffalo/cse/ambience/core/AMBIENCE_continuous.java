@@ -92,4 +92,23 @@ public class AMBIENCE_continuous extends AMBIENCE
 		// TODO Auto-generated method stub
 		return false;
 	}
+
+
+
+	@Override
+	public boolean ambi(Job job, String sinkT) throws IOException,
+	InterruptedException, ClassNotFoundException
+	{
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+
+
+	@Override
+	public boolean pairwise_pai(Job job, String sinkT) throws IOException,
+			InterruptedException, ClassNotFoundException {
+		// TODO Auto-generated method stub
+		return false;
+	}
 }

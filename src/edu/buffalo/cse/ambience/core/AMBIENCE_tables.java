@@ -50,6 +50,8 @@ public enum AMBIENCE_tables
 			case PAI:
 			case SKIP:
 			case SKIPC:
+			case AMBI:
+				return AMBIENCE_tables.mutualInfo.cf[0];
 			case ITER:
 				return AMBIENCE_tables.mutualInfo.cf[0];
 			case KWII:
@@ -74,6 +76,7 @@ public enum AMBIENCE_tables
 			case ITER:
 			case T:
 			case KWII:
+			case AMBI:
 			case PAI:
 				return AMBIENCE_tables.mutualInfo;
 			case NONE:

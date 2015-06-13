@@ -10,7 +10,8 @@ public enum AMBIENCE_ops
 	SKIP,
 	SKIPC,
 	ITER,
-	NONE;
+	NONE,
+	AMBI;
 	public static AMBIENCE_ops resolveOps(String str)
 	{
 		try
