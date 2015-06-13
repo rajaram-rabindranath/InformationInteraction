@@ -17,6 +17,7 @@ import org.apache.hadoop.io.Text;
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.core.MRParams;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
+import edu.buffalo.cse.ambience.dataStructures.Row;
 public class M_pai_rush extends TableMapper<Text,Text>
 {
 	static long numRecords=0;
@@ -27,7 +28,7 @@ public class M_pai_rush extends TableMapper<Text,Text>
 	private int mapperID=0;
 	private String mapLogK;
 	private String mapLogV;
-	private ArrayList<RowObj> rows = new ArrayList<RowObj>();
+	private ArrayList<Row> rows = new ArrayList<Row>();
 	private HashMap<String,HashBag> rush= new HashMap<String,HashBag>(); // a datastructure to hold massive amounts of data before emiting
 	
 	@Override
@@ -71,7 +72,7 @@ public class M_pai_rush extends TableMapper<Text,Text>
 			position++;
 		}
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
-		rows.add(new RowObj(colMap, rowMap, targetValue));
+		rows.add(new Row(colMap, rowMap, targetValue));
     	numRecords++;
     }
 	
@@ -85,12 +86,9 @@ public class M_pai_rush extends TableMapper<Text,Text>
     	StringBuilder strKey = new StringBuilder();
     	HashMap<Integer, String> currRowMap=null;
     	int[] currColMap;
-		//HashMap<Text,HashBag> minicomboiner=new HashMap<Text,HashBag>();
 		Text key=new Text();
 		Text value=new Text();
 		long iter=0;
-		
-		
 		if(numRecords != rows.size()) // DEBUG STATMENT -- FIXME log4j
 		{
 			System.out.println("We have a fundamental problem");
@@ -108,8 +106,8 @@ public class M_pai_rush extends TableMapper<Text,Text>
     		combo[i] = i;
     	
 		int index;
-		ArrayList<RowObj> blackList=new ArrayList<RowObj>();
-		RowObj r;
+		ArrayList<Row> blackList=new ArrayList<Row>();
+		Row r;
 		do{	
 			iter++;
 			//minicomboiner.clear();
@@ -157,7 +155,7 @@ public class M_pai_rush extends TableMapper<Text,Text>
 			}
 			context.progress(); // for time out issues
 			/** remove black-listed row/s **/
-			for(RowObj o:blackList)
+			for(Row o:blackList)
 				rows.remove(o);
 			blackList.clear();
 			/** get next combination **/

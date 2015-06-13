@@ -17,6 +17,7 @@ import org.apache.hadoop.io.Text;
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.core.MRParams;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
+import edu.buffalo.cse.ambience.dataStructures.Row;
 public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 {
 	static long numRecords=0;
@@ -27,7 +28,7 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 	private int mapperID=0;
 	private String mapLogK;
 	private String mapLogV;
-	private ArrayList<RowObj> rows = new ArrayList<RowObj>();
+	private ArrayList<Row> rows = new ArrayList<Row>();
 	
 	@Override
 	protected void setup(Context context) throws IOException, InterruptedException 
@@ -72,7 +73,7 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 		colCntMax=rowMap.size() > colCntMax ? rowMap.size():colCntMax;
 		if(rowMap.size()!=nCols)
 			System.out.println("Row size differs ----"+nCols+"---"+rowMap.size());
-		rows.add(new RowObj(colMap, rowMap, targetValue));
+		rows.add(new Row(colMap, rowMap, targetValue));
     	numRecords++;
     }
 	
@@ -108,9 +109,9 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
     		combo[i] = i;
     	
 		int index;
-		//ArrayList<RowObj> blackList=new ArrayList<RowObj>();
+		//ArrayList<Row> blackList=new ArrayList<Row>();
 		// int blacklistcnt=0;
-		RowObj r;
+		Row r;
 		do{	
 			iter++;
 			minicomboiner.clear();
@@ -168,7 +169,7 @@ public class M_pai_cumulative_skipper extends TableMapper<Text,Text>
 				}
 			}
 			/** remove black-listed row/s **/
-			/*for(RowObj o:blackList)
+			/*for(Row o:blackList)
 				rows.remove(o);
 			blackList.clear();*/
 			/** get next combination **/

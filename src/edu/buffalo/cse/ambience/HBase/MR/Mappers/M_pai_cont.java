@@ -16,7 +16,6 @@ import org.apache.hadoop.io.Text;
 import edu.buffalo.cse.ambience.core.AMBIENCE;
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.core.MRParams;
-import edu.buffalo.cse.ambience.dataStructures.Combination;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
 
 public class M_pai_cont extends TableMapper<Text,Text>
@@ -55,15 +54,8 @@ public class M_pai_cont extends TableMapper<Text,Text>
 	 */
 	public void map(ImmutableBytesWritable row, Result values, Context context) throws IOException 
     {
-		/*if(k==0 || n ==0) --FIXME -- must test with bad values for K and N
-		{
-			System.out.println("ERROR ::");
-			System.out.println("given "+n+" choose "+k);
-			return;
-		}*/
 		String targetValue =new String(values.getFamilyMap(Bytes.toBytes(src_cf[1])).get(Bytes.toBytes(TARGET)));
     	HashMap<Integer,String> rowMap=AMBIENCE.basicTransform(values.getFamilyMap(Bytes.toBytes(src_cf[0])));
-    	
     	rows.add(rowMap);
     	targets.add(targetValue);
     	numRecords++;

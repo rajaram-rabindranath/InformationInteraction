@@ -15,7 +15,6 @@ import org.apache.hadoop.io.Text;
 import edu.buffalo.cse.ambience.core.AMBIENCE;
 import edu.buffalo.cse.ambience.core.AMBIENCE_tables;
 import edu.buffalo.cse.ambience.core.MRParams;
-import edu.buffalo.cse.ambience.dataStructures.Combination;
 import edu.buffalo.cse.ambience.dataStructures.Constants;
 
 public class M_kwiiList extends TableMapper<Text,Text>
