@@ -199,6 +199,7 @@ public class LibHBase implements DBOps
    		return handle.getRegionLocations();
    	}
    	
+   	
    	/**
    	 * Given a set of variable names (combination) return their ids [in sorted order]
    	 * @param var
@@ -427,14 +428,14 @@ public class LibHBase implements DBOps
 	 * @param operation
 	 * FIXME --- does not work for more than one filter --- no point of filterlist -- 2 days wasted in this 
 	 */
-	public void setColsTo(Scan s, String[] cols,boolean operation) throws IOException,ElementNotFoundException
+	public void setColVarsTo(Scan s, String[] cols,boolean operation) throws IOException,ElementNotFoundException
 	{
 		// FIXME use this for true case --- FIXME FIXME FIXME
 		/*s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("0"));
 		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("1"));
 		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("2"));
 		*/
-		
+		if(cols==null||cols.length==0)return;
 		FilterList filterList = new FilterList();
 		Filter qualfilter;
 		CompareOp op= operation ? CompareOp.EQUAL:CompareOp.NOT_EQUAL;
@@ -448,6 +449,39 @@ public class LibHBase implements DBOps
 		
 	}
 	
+	public void setColIDsTo(Scan s, String[] cols,boolean operation)
+	{
+		// FIXME use this for true case --- FIXME FIXME FIXME
+		/*s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("0"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("1"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("2"));
+		*/
+		if(cols==null||cols.length==0)return;
+		FilterList filterList = new FilterList();
+		Filter qualfilter;
+		CompareOp op= operation ? CompareOp.EQUAL:CompareOp.NOT_EQUAL;
+		for(String colID:cols)
+		{	
+			qualfilter=new QualifierFilter(op,new BinaryComparator(Bytes.toBytes(Integer.parseInt(colID))));
+			filterList.addFilter(qualfilter);
+		}
+		s.setFilter(filterList);
+		
+	}
+	
+	public void setColIDsTo(Scan s, Integer[] cols,boolean operation)
+	{
+		// FIXME use this for true case --- FIXME FIXME FIXME
+		/*s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("0"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("1"));
+		s.addColumn(Bytes.toBytes(AMBIENCE_tables.source.getColFams()[0]),Bytes.toBytes("2"));
+		*/
+		if(cols==null||cols.length==0)return;
+		String[] strCols=new String[cols.length];
+		for(int i=0;i<cols.length;i++)
+			strCols[i]=cols[i].toString();
+		setColIDsTo(s, strCols, operation);
+	}
 	public Scan getScanner(int cacheSize,Filter filter) // FIXME
 	{
 		return null;
@@ -484,6 +518,14 @@ public class LibHBase implements DBOps
 		s.setCaching(DEFAULT_SCANNER_CACHING); 
 		return s;
 	}
+
+	
+	public void enableVersionSafe(String tblname) throws TableNotFoundException
+	{
+		
+		HTable tbl=getTableHandler(tblname);
+		tbl.setAutoFlush(false, false);
+	}
 	
    	/**
    	 * 
@@ -518,6 +560,7 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
+				colDesc.setMaxVersions(Integer.MAX_VALUE); // FIXME -- only here to handle top table
 				if(shouldCompress)colDesc.setCompressionType(Compression.Algorithm.LZO);
 				tableDescriptor.addFamily(colDesc);
 			}
@@ -550,7 +593,7 @@ public class LibHBase implements DBOps
 			byte[][] splits=genSplits(splitCnt);
 			if(tableExists(tableName))
 			{
-				hAdmin.disableTable(tableName);
+				if(hAdmin.isTableEnabled(tableName))hAdmin.disableTable(tableName);
 				hAdmin.deleteTable(tableName);
 			}
 			HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf(tableName));
@@ -558,6 +601,7 @@ public class LibHBase implements DBOps
 			for(int i =0;i<colfams.length;i++)
 			{
 				colDesc=new HColumnDescriptor(colfams[i]);
+				colDesc.setMaxVersions(Integer.MAX_VALUE); // FIXME -- only here to handle top table
 				if(shouldCompress)colDesc.setCompressionType(Compression.Algorithm.LZO); 
 				tableDescriptor.addFamily(colDesc);
 			}
@@ -685,7 +729,7 @@ public class LibHBase implements DBOps
 			table = new HTable(conf,tableName);
 			Scan scan = new Scan();
 			scan.setCaching(DEFAULT_SCANNER_CACHING); 
-			scan.addFamily(Bytes.toBytes("indVars"));
+			scan.addFamily(Bytes.toBytes(colfam));
 			ResultScanner scanner = table.getScanner(scan);
 			int counter=0;
 			for(Result result = scanner.next(); (result != null); result = scanner.next()) 
@@ -700,11 +744,8 @@ public class LibHBase implements DBOps
 			    String key = Bytes.toString(result.getRow());
 			    NavigableMap<byte[], byte[]> list = entireRow.getFamilyMap(Bytes.toBytes(colfam));
 			    Set<byte[]> entry =  list.keySet();
-			    System.out.println("number of columns "+entry.size());
 			    for(byte[] colKey : entry)
-            	{
-			    		System.out.println("Key="+key+"--"+"value="+Bytes.toString(list.get(colKey)));
-			    }
+            			System.out.println("Key="+key+"--"+"value="+Bytes.toString(list.get(colKey)));
 			    counter++;
 			}
 			table.close();
