@@ -13,7 +13,6 @@ public class ContingencyT
 	public HashBag target;
 	public int totl;
 	
-	
 	public ContingencyT(NavigableMap<byte[], byte[]> map)
 	{
 		Set<byte[]> keys= map.keySet();
