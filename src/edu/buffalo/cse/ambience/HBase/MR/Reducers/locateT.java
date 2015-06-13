@@ -13,8 +13,6 @@ import org.apache.hadoop.io.DoubleWritable;
 
 import edu.buffalo.cse.ambience.dataStructures.gyan;
 
-
-
 /**
  * 
  * @author dev
@@ -42,7 +40,7 @@ public abstract class locateT
 {
 	protected PriorityQueue<gyan> PQ;
 	protected int T;
-	abstract public void add(String combID,double value);
+	abstract public void add(String combMapping,double value);
 	abstract protected void setOrder();
 	abstract public ArrayList<gyan> asList();
 	
@@ -64,17 +62,17 @@ public abstract class locateT
 					private DoubleWritable w = new DoubleWritable();
 					private ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 					
-				    public void add(String combID, double value) 
+				    public void add(String combMapping, double value) 
 					{
 						int size=PQ.size();
 						if(size<T)
-							PQ.offer(new gyan(combID, value));
+							PQ.offer(new gyan(combMapping, value));
 						else
 						{
 							if(PQ.peek().value<value)
 							{
 								PQ.poll();
-								PQ.offer(new gyan(combID,value));
+								PQ.offer(new gyan(combMapping,value));
 							}
 						}
 					}
@@ -87,7 +85,7 @@ public abstract class locateT
 						{
 							while(!PQ.isEmpty())
 							{
-								g=PQ.poll();w.set(g.value);
+								g=PQ.poll();w.set(g.value); // FIXME data is lost for ever due to polling
 								g.orderedB=new byte[d.getSerializedLength(w)];
 								buffer.set(g.orderedB);d.serialize(w, buffer);
 								n.add(g);
@@ -114,18 +112,18 @@ public abstract class locateT
 					private ImmutableBytesWritable buffer = new ImmutableBytesWritable();
 				    
 				    @Override
-					public void add(String combID, double value) 
+					public void add(String combMapping, double value) 
 					{
 						int size=PQ.size();
 						if(size<T)
-							PQ.offer(new gyan(combID, value));
+							PQ.offer(new gyan(combMapping, value));
 						else
 						{
 							
 							if(PQ.peek().value>value)
 							{
 								PQ.poll();
-								PQ.offer(new gyan(combID,value));
+								PQ.offer(new gyan(combMapping,value));
 							}
 						}
 					}
@@ -137,7 +135,7 @@ public abstract class locateT
 						{
 							while(!PQ.isEmpty())
 							{
-								g=PQ.poll();w.set(g.value);
+								g=PQ.poll();w.set(g.value); // FIXME -- data is lost forever due to polling
 								g.orderedB=new byte[d.getSerializedLength(w)];
 								buffer.set(g.orderedB);d.serialize(w, buffer);
 								n.add(g);
@@ -162,6 +160,11 @@ public abstract class locateT
 	}
 }
 
+/**
+ * 
+ * @author dev
+ *
+ */
 class apex implements Comparator<gyan>
 {
 	public int compare(gyan g1,gyan g2)
@@ -172,6 +175,11 @@ class apex implements Comparator<gyan>
 	}
 }
 
+/**
+ * 
+ * @author dev
+ *
+ */
 class nadir implements Comparator<gyan>
 {
 	public int compare(gyan g1,gyan g2)

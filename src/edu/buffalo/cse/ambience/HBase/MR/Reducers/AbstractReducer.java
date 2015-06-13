@@ -62,7 +62,7 @@ public abstract class AbstractReducer extends TableReducer<Text,Text, ImmutableB
 		for(gyan g : findT.asList())
 		{
 			Put put=new Put(g.orderedB);
-			put.add(colfam,qual,Bytes.toBytes(g.combID));
+			put.add(colfam,qual,Bytes.toBytes(g.getCombination()));
 			context.write(top,put);
 			context.progress();
 		}
